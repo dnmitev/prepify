@@ -10,12 +10,12 @@ context: |
   - After implementation work, **run tests before committing**:
     - Default gate: `npm test --workspaces --if-present`
     - After touching a single package heavily: `npm test -w @prepify/<workspace>` when faster.
-    - Build gate before pushing or when changing TS/build graph: `npm run build --workspaces --if-present`
+    - Build gate before pushing or when changing TS/build graph: `npm run build` (root script builds **shared → db → apps** in order)
   - Optional but recommended before merge: `npm run lint` if configured locally.
   - Playwright (`npm run test:e2e -w @prepify/web`) needs API + web + DB; run when UI/API paths change, not after every tiny edit.
   - Do **not** commit `.env` or secrets (use `.env.example` only).
 
-  CI on PRs runs `npm ci`, `npm test --workspaces --if-present`, and `npm run build --workspaces --if-present` (see `.github/workflows/ci.yml`).
+  CI on PRs runs `npm ci`, `npm test --workspaces --if-present`, and `npm run build` (see `.github/workflows/ci.yml`).
 
 # Per-artifact rules for agents using OpenSpec in this repo.
 rules:

@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build -w @prepify/shared && npm run build -w @prepify/db && npm run build -w @prepify/api && npm run build -w @prepify/worker && npm run build -w @prepify/web",
     "dev": "echo \"Run api and web in separate terminals: npm run dev -w @prepify/api && npm run dev -w @prepify/web\"",
     "lint": "eslint .",
     "format": "prettier -w .",

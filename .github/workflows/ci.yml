@@ -18,5 +18,5 @@ jobs:
         run: npm ci
       - name: Unit tests
         run: npm test --workspaces --if-present
-      - name: Build (packages + apps)
-        run: npm run build --workspaces --if-present
+      - name: Build (dependency order: shared → db → apps)
+        run: npm run build
