@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { attempts, examTypes } from "@prepify/db";
 import pg from "pg";
 import type { FastifyInstance } from "fastify";
-import { createDb } from "@prepify/db";
+import { createDb, getPgPool } from "@prepify/db";
 import { buildServer } from "./server.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,7 @@ describe("GET /attempts (resumable list)", () => {
   let examId: string;
 
   beforeAll(async () => {
-    container = await new PostgreSqlContainer("postgres:16-alpine").start();
+    container = await new PostgreSqlContainer("pgvector/pgvector:pg16").start();
     const databaseUrl = container.getConnectionUri();
     process.env["DATABASE_URL"] = databaseUrl;
 
@@ -41,7 +41,7 @@ describe("GET /attempts (resumable list)", () => {
       unscoredCount: 15,
       passingScaledScore: 720,
     });
-    await seedDb.$client.end();
+    await getPgPool(seedDb).end();
 
     app = await buildServer();
   }, 120_000);
@@ -124,7 +124,7 @@ describe("GET /attempts (resumable list)", () => {
       expect(activeEntry?.examTypeCode).toBe("SAA-C03");
       expect(activeEntry?.remainingActiveSeconds).toBe(600);
     } finally {
-      await db.$client.end();
+      await getPgPool(db).end();
     }
   });
 
@@ -201,7 +201,7 @@ describe("GET /attempts (resumable list)", () => {
       expect(body2.items[0]?.id).toBe(oldest);
       expect(body2.items[0]?.scaledScore).toBe(650);
     } finally {
-      await db.$client.end();
+      await getPgPool(db).end();
     }
   });
 });

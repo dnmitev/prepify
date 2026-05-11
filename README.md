@@ -34,10 +34,13 @@ Compose exposes:
 
 | Service               | Purpose                                                                      | Host port    |
 | --------------------- | ---------------------------------------------------------------------------- | ------------ |
-| `postgres`            | Application DB (`prepify`)                                                   | **5432**     |
+| `postgres`            | Application DB (`prepify`, **pgvector** enabled)                             | **5432**     |
+| `tei-embeddings`      | Local **OpenAI-compatible** `/v1/embeddings` (BGE small, **384-dim**)        | **8089**     |
 | `temporal-postgresql` | Temporal metadata DB only (no host port — avoids clashing with app Postgres) | *(internal)* |
 | `temporal`            | Temporal frontend (gRPC)                                                     | **7233**     |
 | `temporal-ui`         | Temporal Web UI                                                              | **8080**     |
+
+`tei-embeddings` is **linux/amd64**; on some ARM Macs it may be slow or fail to start—in that case keep **`LLM_ROLE_EMBEDDING_PROVIDER=mock`** for dev or point **`EMBEDDING_OPENAI_BASE_URL`** at a remote embeddings endpoint whose output dimension is **384** (matching the migration).
 
 4. Migrate + seed (application database):
 
@@ -72,6 +75,10 @@ npm run dev -w @prepify/worker
 ```
 
 Without Temporal running, **`POST /jobs/generate`** returns **503**. Optional UI: **Temporal Web** at `http://localhost:8080`.
+
+### Post-exam study guide (failed scored items)
+
+When **`POST_EXAM_TRAINING_ENABLED=1`**, finishing an attempt with **at least one incorrect scored question** starts Temporal workflow **`postExamTrainingWorkflow`** (`post-exam-training-<attemptId>`). The worker writes **English** per-item summaries (small/cheap role), a consolidated **teaching** block (stronger role), **`pgvector`** embeddings (**384** dimensions, aligned with **BGE small** / Compose **TEI**), and exposes **`GET /attempts/:id/training`** for status and text. Default roles use **`mock`** so local dev works without extra LLM calls; set **`LLM_ROLE_*`** and **`EMBEDDING_OPENAI_BASE_URL`** (e.g. `http://localhost:8089/v1` for Compose **TEI**) for real models.
 
 **Breaking change:** **`POST /jobs/generate`** now requires **`examTypeCode`** (a seeded catalog code such as **`SAA-C03`**). Requests that only send the legacy **`topic`** field will receive **400**. Optional fields: **`topicHint`** (narrowing focus), **`summarize`** (**boolean**, default **false** — set **`true`** to run the optional small-model summarization step before generation), **`questionCount`** (**integer**, default **1**, max **`GENERATION_MAX_QUESTIONS_PER_JOB`** or **50** — run one Temporal workflow that generates that many questions sequentially).
 

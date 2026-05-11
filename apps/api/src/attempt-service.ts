@@ -3,6 +3,8 @@ import type { DbClient } from "@prepify/db";
 import { attemptItems, attempts, domains, examTypes, questionOptions, questions, responses } from "@prepify/db";
 import { applyActiveDecay, type AttemptClockStatus, passesExam, scaledScoreFromAccuracy } from "@prepify/shared";
 
+import { startPostExamTrainingWorkflowIfNeeded } from "./start-post-exam-training-workflow.js";
+
 function shuffleInPlace<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -327,11 +329,14 @@ export async function calculateAttemptOutcome(db: DbClient, attemptId: string) {
   const scaled = scaledScoreFromAccuracy(fraction);
   const passed = passesExam(scaled, exam.passingScaledScore);
 
+  const incorrectScoredCount = scoredItems.length - correct;
+
   return {
     scaledScore: scaled,
     passed,
     rawCorrect: correct,
     scoredCount: scoredItems.length,
+    incorrectScoredCount,
     fractionCorrect: fraction,
     domainBreakdown: [...domainStats.entries()].map(([code, v]) => ({
       code,
@@ -362,6 +367,14 @@ export async function scoreAttempt(db: DbClient, attemptId: string) {
       submittedAt: attemptRow.submittedAt ?? new Date(),
     })
     .where(eq(attempts.id, attemptId));
+
+  void startPostExamTrainingWorkflowIfNeeded(db, {
+    attemptId,
+    incorrectScoredCount: outcome.incorrectScoredCount,
+    environmentLabel: process.env["APP_ENV"] ?? "development",
+  }).catch((err) => {
+    console.error("[post-exam-training] start workflow error:", err);
+  });
 
   return outcome;
 }

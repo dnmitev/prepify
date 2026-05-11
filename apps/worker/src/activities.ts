@@ -1,55 +1,13 @@
 import { and, asc, eq } from "drizzle-orm";
-import type { DbClient } from "@prepify/db";
-import {
-  createDb,
-  domains,
-  examTypes,
-  generationJobs,
-  llmUsageEvents,
-  questionOptions,
-  questions,
-} from "@prepify/db";
+import { domains, examTypes, generationJobs, questionOptions, questions } from "@prepify/db";
 import { validateGeneratedQuestionPayload } from "@prepify/shared";
 
+import { workerDb } from "./db-client.js";
+import { recordLlmUsage } from "./llm-usage.js";
 import { runQuestionGenerationModel } from "./question-generation.js";
 
-let _db: DbClient | undefined;
-
-function getDb() {
-  const url = process.env["DATABASE_URL"];
-  if (!url) throw new Error("DATABASE_URL is required for worker activities");
-  _db ??= createDb(url);
-  return _db;
-}
-
-async function recordUsage(params: {
-  jobId: string;
-  environmentLabel: string;
-  provider: string;
-  model: string;
-  role: string;
-  workflowId: string;
-  activityName: string;
-  inputTokens: number;
-  outputTokens: number;
-}) {
-  const total = params.inputTokens + params.outputTokens;
-  await getDb().insert(llmUsageEvents).values({
-    environmentLabel: params.environmentLabel,
-    provider: params.provider,
-    model: params.model,
-    role: params.role,
-    workflowId: params.workflowId,
-    jobId: params.jobId,
-    activityName: params.activityName,
-    inputTokens: params.inputTokens,
-    outputTokens: params.outputTokens,
-    totalTokens: total,
-  });
-}
-
 async function failJob(jobId: string, message: string): Promise<void> {
-  await getDb()
+  await workerDb()
     .update(generationJobs)
     .set({
       status: "failed",
@@ -82,12 +40,12 @@ export async function summarizeTopic(input: {
   workflowId: string;
 }): Promise<string> {
   const cfg = roleConfig("summarization");
-  await getDb()
+  await workerDb()
     .update(generationJobs)
     .set({ status: "running", updatedAt: new Date() })
     .where(eq(generationJobs.id, input.jobId));
 
-  await recordUsage({
+  await recordLlmUsage(workerDb(), {
     jobId: input.jobId,
     environmentLabel: input.environmentLabel,
     provider: cfg.provider,
@@ -116,7 +74,7 @@ export async function generateQuestionItem(input: {
   const cfg = roleConfig("question_generation");
 
   try {
-    const db = getDb();
+    const db = workerDb();
 
     if (!input.summarize) {
       await db
@@ -157,7 +115,7 @@ export async function generateQuestionItem(input: {
       questionCount: input.questionCount,
     });
 
-    await recordUsage({
+    await recordLlmUsage(db, {
       jobId: input.jobId,
       environmentLabel: input.environmentLabel,
       provider: cfg.provider,
@@ -225,3 +183,10 @@ export async function generateQuestionItem(input: {
     throw e;
   }
 }
+
+export {
+  postExamTrainingEmbedActivity,
+  postExamTrainingPrepareActivity,
+  postExamTrainingSummarizeActivity,
+  postExamTrainingTeachActivity,
+} from "./post-exam-training-activities.js";

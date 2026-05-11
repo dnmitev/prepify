@@ -6,6 +6,11 @@ const { summarizeTopic, generateQuestionItem } = proxyActivities<typeof acts>({
   retry: { maximumAttempts: 4 },
 });
 
+const postExam = proxyActivities<typeof acts>({
+  startToCloseTimeout: "15 minutes",
+  retry: { maximumAttempts: 6 },
+});
+
 export async function generateQuestionWorkflow(input: {
   jobId: string;
   examTypeCode: string;
@@ -42,4 +47,38 @@ export async function generateQuestionWorkflow(input: {
       iterationIndex: i,
     });
   }
+}
+
+export async function postExamTrainingWorkflow(input: {
+  attemptId: string;
+  examTypeCode: string;
+  environmentLabel: string;
+}): Promise<void> {
+  const wf = workflowInfo().workflowId;
+  const prep = await postExam.postExamTrainingPrepareActivity({
+    attemptId: input.attemptId,
+    examTypeCode: input.examTypeCode,
+    environmentLabel: input.environmentLabel,
+    temporalWorkflowId: wf,
+  });
+  if (prep.skip) return;
+  await postExam.postExamTrainingSummarizeActivity({
+    runId: prep.runId,
+    attemptId: input.attemptId,
+    examTypeCode: input.examTypeCode,
+    items: prep.items,
+    environmentLabel: input.environmentLabel,
+    workflowId: wf,
+  });
+  await postExam.postExamTrainingTeachActivity({
+    runId: prep.runId,
+    examTypeCode: input.examTypeCode,
+    environmentLabel: input.environmentLabel,
+    workflowId: wf,
+  });
+  await postExam.postExamTrainingEmbedActivity({
+    runId: prep.runId,
+    environmentLabel: input.environmentLabel,
+    workflowId: wf,
+  });
 }

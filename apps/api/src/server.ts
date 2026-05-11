@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import { and, asc, eq } from "drizzle-orm";
-import { createDb } from "@prepify/db";
+import { createDb, getPgPool } from "@prepify/db";
 import {
   attemptItems,
   attempts,
   domains,
   examTypes,
   generationJobs,
+  getPostExamTrainingRunByAttemptId,
   llmUsageEvents,
   questionOptions,
   questions,
@@ -49,7 +50,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
 
   app.addHook("onClose", async () => {
-    await db.$client.end();
+    await getPgPool(db).end();
   });
 
   await app.register(cors, {
@@ -168,6 +169,26 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.get("/attempts", async () => {
     const attempts = await listResumableAttempts(db);
     return { attempts };
+  });
+
+  /**
+   * Post-exam AI training status for a finalized attempt (English study guide + workflow state).
+   * Response: `{ status, teachingText?, embeddingModel?, embeddingDim?, errorMessage?, updatedAt }`.
+   */
+  app.get("/attempts/:id/training", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const run = await getPostExamTrainingRunByAttemptId(db, id);
+    if (!run) {
+      return reply.code(404).send({ error: "No training record for this attempt" });
+    }
+    return {
+      status: run.status,
+      teachingText: run.teachingText,
+      embeddingModel: run.embeddingModel,
+      embeddingDim: run.embeddingDim,
+      errorMessage: run.errorMessage,
+      updatedAt: run.updatedAt,
+    };
   });
 
   app.get("/attempts/:id", async (req, reply) => {

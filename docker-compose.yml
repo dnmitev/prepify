@@ -1,6 +1,7 @@
 services:
+  # pgvector-enabled Postgres for application data (post-exam training embeddings).
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: prepify
       POSTGRES_PASSWORD: prepify
@@ -50,6 +51,18 @@ services:
     ports:
       - "8080:8080"
 
+  # Local embedding server (OpenAI-compatible /v1/embeddings). BGE small = 384-dim (matches DB migration).
+  # On Apple Silicon this image is amd64; use a remote embedding API in .env if it fails to start.
+  tei-embeddings:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    platform: linux/amd64
+    command: ["--model-id", "BAAI/bge-small-en-v1.5", "--port", "80"]
+    ports:
+      - "8089:80"
+    volumes:
+      - tei_cache:/data
+
 volumes:
   pgdata:
   temporal_pgdata:
+  tei_cache:

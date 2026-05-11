@@ -140,3 +140,50 @@ export const llmUsageEvents = pgTable("llm_usage_events", {
   outputTokens: integer("output_tokens"),
   totalTokens: integer("total_tokens"),
 });
+
+/** One row per finalized attempt selected for post-exam AI training (English-only content). */
+export const postExamTrainingRuns = pgTable(
+  "post_exam_training_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    /** Optional future learner key; null for anonymous practice. */
+    userId: uuid("user_id"),
+    examTypeCode: text("exam_type_code").notNull(),
+    status: text("status").notNull(), // pending | summarizing | teaching | embedding | succeeded | failed
+    teachingText: text("teaching_text"),
+    temporalWorkflowId: text("temporal_workflow_id").notNull(),
+    errorMessage: text("error_message"),
+    environmentLabel: text("environment_label").notNull().default("development"),
+    embeddingModel: text("embedding_model"),
+    embeddingDim: integer("embedding_dim"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    uniqAttempt: uniqueIndex("post_exam_training_runs_attempt_id_idx").on(t.attemptId),
+  }),
+);
+
+export const postExamTrainingItemSummaries = pgTable(
+  "post_exam_training_item_summaries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => postExamTrainingRuns.id, { onDelete: "cascade" }),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    summaryText: text("summary_text").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    uniqRunQuestion: uniqueIndex("post_exam_training_item_summaries_run_question_idx").on(
+      t.runId,
+      t.questionId,
+    ),
+  }),
+);
