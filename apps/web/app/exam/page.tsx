@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiGet, apiSend, formatApiError } from "@/lib/api";
+import { formatAttemptClock, type ResumableAttempt } from "@/lib/resumable-attempts";
 
 export default function ExamIntroPage() {
   const router = useRouter();
@@ -21,6 +23,17 @@ export default function ExamIntroPage() {
     | undefined
   >();
   const [error, setError] = useState<string | undefined>();
+  const [resumable, setResumable] = useState<ResumableAttempt[]>([]);
+
+  useEffect(() => {
+    apiGet<{ attempts: ResumableAttempt[] }>("/attempts")
+      .then((d) => {
+        setResumable(d.attempts.filter((a) => a.examTypeCode === "SAA-C03"));
+      })
+      .catch(() => {
+        setResumable([]);
+      });
+  }, []);
 
   useEffect(() => {
     apiGet<{
@@ -42,6 +55,12 @@ export default function ExamIntroPage() {
 
   async function start() {
     setError(undefined);
+    if (resumable.length > 0) {
+      const ok = window.confirm(
+        "You already have an in-progress attempt for this exam. Start a new one anyway? Your previous attempt stays saved and you can still resume it from the home page or here.",
+      );
+      if (!ok) return;
+    }
     try {
       const res = await apiSend<{ attemptId: string }>("/attempts", {
         method: "POST",
@@ -57,6 +76,20 @@ export default function ExamIntroPage() {
     <div className="card">
       <h1>SAA-C03 practice</h1>
       {error ? <p style={{ color: "#fca5a5" }}>{error}</p> : null}
+      {resumable.length > 0 ? (
+        <section style={{ marginBottom: 20 }} aria-label="Continue in-progress attempt">
+          <h2 style={{ fontSize: "1.1rem", marginBottom: 8 }}>In progress</h2>
+          <ul>
+            {resumable.map((a) => (
+              <li key={a.id}>
+                <Link href={`/attempt/${a.id}`} data-testid={`resume-attempt-${a.id}`}>
+                  Continue ({a.status}) — {formatAttemptClock(a.remainingActiveSeconds)} active time left
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {!exam ? (
         <p>Loading exam metadata…</p>
       ) : (
@@ -70,7 +103,7 @@ export default function ExamIntroPage() {
           </ul>
           <p style={{ opacity: 0.8 }}>
             Domains:{" "}
-            {exam.domains.map((d) => `${d.name} (${d.weightPercent}%)`).join(" · ")}
+            {exam.domains.map((d) => `${d.name} (${String(d.weightPercent)}%)`).join(" · ")}
           </p>
           <p style={{ opacity: 0.75 }}>
             Reminder: scaled scoring here is an approximation for readiness tracking—not an official AWS

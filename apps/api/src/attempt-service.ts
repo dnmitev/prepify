@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { count, desc, eq, inArray } from "drizzle-orm";
 import type { DbClient } from "@prepify/db";
 import { attemptItems, attempts, domains, examTypes, questionOptions, questions, responses } from "@prepify/db";
 import { applyActiveDecay, type AttemptClockStatus, passesExam, scaledScoreFromAccuracy } from "@prepify/shared";
@@ -55,6 +55,66 @@ export async function syncAttemptClock(
     .returning();
 
   return updated!;
+}
+
+export type ResumableAttemptSummary = {
+  id: string;
+  examTypeCode: string;
+  status: string;
+  remainingActiveSeconds: number;
+  createdAt: Date;
+  lastActivityAt: Date;
+};
+
+/**
+ * Lists attempts that can still be opened in the exam UI (`active` or `paused`).
+ * Applies `syncAttemptClock` for each **active** row so expiry matches `GET /attempts/:id`.
+ */
+export async function listResumableAttempts(
+  db: DbClient,
+  now = new Date(),
+): Promise<ResumableAttemptSummary[]> {
+  const baseRows = await db
+    .select({
+      attemptId: attempts.id,
+      examTypeCode: examTypes.code,
+      status: attempts.status,
+      remainingActiveSeconds: attempts.remainingActiveSeconds,
+      createdAt: attempts.createdAt,
+      lastActivityAt: attempts.lastActivityAt,
+    })
+    .from(attempts)
+    .innerJoin(examTypes, eq(attempts.examTypeId, examTypes.id))
+    .where(inArray(attempts.status, ["active", "paused"]))
+    .orderBy(desc(attempts.lastActivityAt));
+
+  const out: ResumableAttemptSummary[] = [];
+  for (const row of baseRows) {
+    if (row.status === "active") {
+      const synced = await syncAttemptClock(db, row.attemptId, now);
+      if (synced.status === "submitted" || synced.status === "expired") {
+        continue;
+      }
+      out.push({
+        id: synced.id,
+        examTypeCode: row.examTypeCode,
+        status: synced.status,
+        remainingActiveSeconds: synced.remainingActiveSeconds,
+        createdAt: synced.createdAt,
+        lastActivityAt: synced.lastActivityAt,
+      });
+    } else {
+      out.push({
+        id: row.attemptId,
+        examTypeCode: row.examTypeCode,
+        status: row.status,
+        remainingActiveSeconds: row.remainingActiveSeconds,
+        createdAt: row.createdAt,
+        lastActivityAt: row.lastActivityAt,
+      });
+    }
+  }
+  return out;
 }
 
 export async function startAttempt(db: DbClient, examTypeCode: string) {

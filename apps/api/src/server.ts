@@ -15,7 +15,7 @@ import {
   responses,
 } from "@prepify/db";
 import { validateQuestionStructure } from "@prepify/shared";
-import { scoreAttempt, startAttempt, syncAttemptClock } from "./attempt-service.js";
+import { listResumableAttempts, scoreAttempt, startAttempt, syncAttemptClock } from "./attempt-service.js";
 import { maxQuestionsPerJobFromEnv, parseQuestionCount } from "./parse-question-count.js";
 
 const env = process.env;
@@ -39,6 +39,10 @@ export async function buildServer(): Promise<FastifyInstance> {
   const db = createDb(dbUrl);
 
   const app = Fastify({ logger: true });
+
+  app.addHook("onClose", async () => {
+    await db.$client.end();
+  });
 
   await app.register(cors, {
     origin: corsOriginOption(),
@@ -144,6 +148,11 @@ export async function buildServer(): Promise<FastifyInstance> {
       app.log.error(e);
       return reply.code(400).send({ error: (e as Error).message });
     }
+  });
+
+  app.get("/attempts", async () => {
+    const attempts = await listResumableAttempts(db);
+    return { attempts };
   });
 
   app.get("/attempts/:id", async (req, reply) => {
