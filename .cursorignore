@@ -1,0 +1,31 @@
+# Dependencies & installs
+node_modules/
+
+# Build outputs (monorepo + Next)
+dist/
+.next/
+out/
+.turbo/
+.vercel/
+
+# Tests & quality
+coverage/
+playwright-report/
+test-results/
+*.lcov
+
+# Secrets & local env (never index)
+.env
+.env.*
+!.env.example
+
+# Logs & OS noise
+*.log
+.DS_Store
+
+# TypeScript / tooling caches
+*.tsbuildinfo
+.eslintcache
+
+# Generated knowledge graph (large HTML/JSON; read GRAPH_REPORT.md when needed)
+graphify-out/
