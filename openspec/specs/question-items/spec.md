@@ -21,6 +21,15 @@ The system SHALL record whether a question was **imported** from static material
 - **WHEN** a question is created from a successful AI generation workflow
 - **THEN** the question record references the originating **generation job** identifier for auditability
 
+### Requirement: Multiple assessment items from one generation job
+
+The system SHALL allow **more than one** question record to reference the **same** generation job identifier when produced by a single batch generation workflow.
+
+#### Scenario: Trace multiple AI items to one job
+
+- **WHEN** a batch workflow persists two or more AI-generated questions
+- **THEN** each question references the shared generation job identifier for auditability
+
 ### Requirement: Validate structural integrity before use in attempts
 
 The system SHALL reject questions that violate structural rules: **at least two options**, **at least one correct option**, **multi-select** MUST have **two or more** correct options, **single-select** MUST have **exactly one** correct option.
