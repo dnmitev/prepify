@@ -43,6 +43,38 @@ describe("validateGeneratedQuestionPayload", () => {
     expect(r.ok).toBe(true);
   });
 
+  it("infers single-select when format says multiple but only one answer is marked correct", () => {
+    const base = minimalValidPayload("SECURE");
+    const r = validateGeneratedQuestionPayload({
+      ...base,
+      format: "multiple",
+      options: base.options.map((o, i) => ({
+        ...o,
+        isCorrect: i === 1,
+      })),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.format).toBe("single");
+  });
+
+  it("infers multi-select when format says single but two answers are marked correct", () => {
+    const base = minimalValidPayload("SECURE");
+    const r = validateGeneratedQuestionPayload({
+      ...base,
+      format: "single",
+      options: base.options.map((o, i) => ({
+        ...o,
+        isCorrect: i === 1 || i === 2,
+        explanation:
+          i === 1 || i === 2 ?
+            o.explanation
+          : "Incorrect distractor explanation text here for validation length.",
+      })),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.format).toBe("multiple");
+  });
+
   it("respects allowedDomainCodes when validating domainCode", () => {
     const ok = validateGeneratedQuestionPayload(minimalValidPayload("CUSTOM"), {
       allowedDomainCodes: ["CUSTOM"],

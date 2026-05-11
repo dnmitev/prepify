@@ -30,6 +30,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+/** Derive select mode from answer keys — models often mismatch `format` vs `isCorrect` counts. */
+function formatInferredFromCorrectFlags(correctCount: number): QuestionFormat {
+  return correctCount >= 2 ? "multiple" : "single";
+}
+
 /** Validates JSON-shaped LLM output before persistence. */
 export function validateGeneratedQuestionPayload(
   raw: unknown,
@@ -106,19 +111,17 @@ export function validateGeneratedQuestionPayload(
     });
   }
 
-  let structureResult = { ok: false, errors: ["Skipped structure check."] as string[] };
-  if (
-    errors.length === 0 &&
-    (format === "single" || format === "multiple") &&
-    parsedOptions.length >= 2
-  ) {
-    structureResult = validateQuestionStructure({
-      format: format as QuestionFormat,
+  const correctCount = parsedOptions.filter((o) => o.isCorrect).length;
+  const effectiveFormat = formatInferredFromCorrectFlags(correctCount);
+
+  if (errors.length === 0 && (format === "single" || format === "multiple")) {
+    const structureResult = validateQuestionStructure({
+      format: effectiveFormat,
       options: parsedOptions.map((o) => ({ position: o.position, isCorrect: o.isCorrect })),
     });
-  }
-  if (!structureResult.ok) {
-    errors.push(...structureResult.errors);
+    if (!structureResult.ok) {
+      errors.push(...structureResult.errors);
+    }
   }
 
   const correct = parsedOptions.filter((o) => o.isCorrect);
@@ -140,7 +143,7 @@ export function validateGeneratedQuestionPayload(
     ok: true,
     value: {
       stem: (stem as string).trim(),
-      format: format as QuestionFormat,
+      format: effectiveFormat,
       domainCode: domainCode as string,
       options: parsedOptions,
     },

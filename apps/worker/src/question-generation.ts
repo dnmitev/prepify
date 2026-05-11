@@ -19,7 +19,7 @@ function jsonContract(domainCodes: readonly string[]): string {
   ]
 }
 Rules:
-- For "single", exactly one option has isCorrect true; for "multiple", two or more.
+- Use "single" when exactly one option has isCorrect true; use "multiple" only when two or more options have isCorrect true — never set format to "multiple" unless at least two options are marked correct.
 - Each correct option MUST have explanation with at least 20 characters of rationale (why it is the best answer).
 - Provide four options (positions 0-3) unless multi-select needs more (still at least 4).
 - domainCode MUST be exactly one of: ${domainCodes.join(", ")}.`;
@@ -104,7 +104,7 @@ ${hintLine}
 
 ${summarySection}
 
-Produce one question JSON object only.`;
+Produce one question JSON object only. Prefer "single" unless the scenario clearly requires selecting multiple answers; if you use "multiple", mark at least two options isCorrect true.`;
 }
 
 async function openAiRawPayload(params: {
