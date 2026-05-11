@@ -47,7 +47,7 @@ Compose exposes:
 | `temporal`            | Temporal frontend (gRPC)                                                     | **7233**     |
 | `temporal-ui`         | Temporal Web UI                                                              | **8080**     |
 
-`tei-embeddings` is **linux/amd64**; on some ARM Macs it may be slow or fail to start—in that case keep **`LLM_ROLE_EMBEDDING_PROVIDER=mock`** for dev or point **`EMBEDDING_OPENAI_BASE_URL`** at a remote embeddings endpoint whose output dimension is **384** (matching the migration).
+`tei-embeddings` is **linux/amd64**; on some ARM Macs it may be slow or fail to start—in that case keep **`LLM_ROLE_EMBEDDING_PROVIDER=mock`** for dev or point **`EMBEDDING_OPENAI_BASE_URL`** at a remote embeddings endpoint whose output dimension is **384** (matching the migration). The Compose file pins **TEI 1.7.x** because older **1.5** images could fail downloading models with **`relative URL without a base`** ([upstream issue](https://github.com/huggingface/text-embeddings-inference/issues/527)).
 
 4. Migrate + seed (application database):
 
