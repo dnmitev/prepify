@@ -62,7 +62,17 @@ services:
     volumes:
       - tei_cache:/data
 
+  # Chat LLM (OpenAI-compatible /v1/chat/completions). Pull models after `up` — see README (Gemma 4, DeepSeek).
+  # Uses host port 11434 (same as native `ollama serve`); stop one if you run both.
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
 volumes:
   pgdata:
   temporal_pgdata:
   tei_cache:
+  ollama_data:

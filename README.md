@@ -16,7 +16,7 @@ Monorepo for **Prepify** — timed certification practice with pause/resume, ser
 cp .env.example .env
 ```
 
-`.env.example` defaults to **Ollama** at `http://localhost:11434/v1` with **Gemma 4** for question generation (`gemma4:latest` — align `LLM_ROLE_QUESTION_GENERATION_MODEL` with `ollama list`). Use the commented fallback block in `.env.example` for **mock** generation when Ollama is unavailable.
+`.env.example` defaults to **Ollama** at `http://localhost:11434/v1` with **Gemma 4** for question generation (`gemma4:latest` — align `LLM_ROLE_QUESTION_GENERATION_MODEL` with `ollama list`). You can use **Compose `ollama`** (see port table below) instead of **`ollama serve` on the host**—not both on **11434** at once. Use the commented fallback block in `.env.example` for **mock** generation when Ollama is unavailable.
 
 2. Install dependencies:
 
@@ -24,7 +24,7 @@ cp .env.example .env
 npm install
 ```
 
-3. Start **Postgres (app)** + **Temporal** + **Temporal Web UI**:
+3. Start **Postgres (app)** + **Temporal** + **Temporal Web UI** + optional local model services (**TEI** embeddings, **Ollama** chat):
 
 ```bash
 docker compose up -d
@@ -35,6 +35,7 @@ Compose exposes:
 | Service               | Purpose                                                                      | Host port    |
 | --------------------- | ---------------------------------------------------------------------------- | ------------ |
 | `postgres`            | Application DB (`prepify`, **pgvector** enabled)                             | **5432**     |
+| `ollama`              | Local **chat** LLM (**OpenAI-compatible** `/v1/chat/completions`)            | **11434**    |
 | `tei-embeddings`      | Local **OpenAI-compatible** `/v1/embeddings` (BGE small, **384-dim**)        | **8089**     |
 | `temporal-postgresql` | Temporal metadata DB only (no host port — avoids clashing with app Postgres) | *(internal)* |
 | `temporal`            | Temporal frontend (gRPC)                                                     | **7233**     |
@@ -82,17 +83,32 @@ When **`POST_EXAM_TRAINING_ENABLED=1`**, finishing an attempt with **at least on
 
 **Breaking change:** **`POST /jobs/generate`** now requires **`examTypeCode`** (a seeded catalog code such as **`SAA-C03`**). Requests that only send the legacy **`topic`** field will receive **400**. Optional fields: **`topicHint`** (narrowing focus), **`summarize`** (**boolean**, default **false** — set **`true`** to run the optional small-model summarization step before generation), **`questionCount`** (**integer**, default **1**, max **`GENERATION_MAX_QUESTIONS_PER_JOB`** or **50** — run one Temporal workflow that generates that many questions sequentially).
 
-### Local LLM — Ollama + Gemma 4
+### Local LLM — Ollama + Gemma 4 (or DeepSeek)
 
-Default `.env.example` targets **[Ollama](https://ollama.com/)**’s OpenAI-compatible API and **Gemma 4**:
+Default `.env.example` targets **[Ollama](https://ollama.com/)**’s OpenAI-compatible API. Choose **one** way to run it:
 
-1. Install/start Ollama and pull a Gemma 4 variant, for example:
-   ```bash
-   ollama pull gemma4
-   ```
-   Use the same tag in **`LLM_ROLE_QUESTION_GENERATION_MODEL`** as shown by `ollama list` (e.g. `gemma4:latest`, `gemma4:e4b`).
-2. Keep **`OPENAI_BASE_URL=http://localhost:11434/v1`** and **`LLM_ROLE_QUESTION_GENERATION_PROVIDER=openai`**.
-3. **`OPENAI_API_KEY`** may stay empty for localhost (see `packages/shared` `allowsMissingOpenAiApiKey`). For a non-loopback endpoint without auth, set **`LOCAL_LLM_SKIP_API_KEY=1`** (dev-only).
+**A — Ollama in Docker (Compose)**  
+After `docker compose up -d`, pull a model into the container (weights persist in the `ollama_data` volume):
+
+```bash
+docker compose exec ollama ollama pull gemma4
+# or: docker compose exec ollama ollama pull gemma4:latest
+```
+
+**DeepSeek-style model (example):** tags change over time—check [Ollama library](https://ollama.com/library), then e.g.:
+
+```bash
+docker compose exec ollama ollama pull deepseek-r1:8b
+```
+
+Set **`LLM_ROLE_QUESTION_GENERATION_MODEL`** to the tag you pulled (e.g. `deepseek-r1:8b`). Same **`OPENAI_BASE_URL=http://localhost:11434/v1`**.
+
+**B — Ollama on the host** (`ollama serve`)  
+Pull with `ollama pull gemma4` (or your chosen tag). **Do not** run host Ollama and Compose **`ollama`** both bound to **11434**—stop one or remap the Compose port in `docker-compose.yml`.
+
+**Common**  
+1. Keep **`OPENAI_BASE_URL=http://localhost:11434/v1`** and **`LLM_ROLE_QUESTION_GENERATION_PROVIDER=openai`** when using Ollama.  
+2. **`OPENAI_API_KEY`** may stay empty for localhost (see `packages/shared` `allowsMissingOpenAiApiKey`). For a non-loopback endpoint without auth, set **`LOCAL_LLM_SKIP_API_KEY=1`** (dev-only).
 
 Summarization stays **`mock`** by default for speed; you can switch **`LLM_ROLE_SUMMARIZATION_PROVIDER`** to **`openai`** and the same **`OPENAI_BASE_URL`** if you want both steps on Ollama.
 
@@ -100,7 +116,7 @@ If Ollama is not running, switch generation to **mock** using the commented bloc
 
 ### Manual checklist (local AI stack)
 
-- `docker compose up -d` — app Postgres + Temporal + UI up.
+- `docker compose up -d` — app Postgres + Temporal + UI + **Ollama** (and **TEI** if desired) up; run **`docker compose exec ollama ollama pull …`** once for chat weights.
 - Temporal Web UI loads at `http://localhost:8080`.
 - **`POST /jobs/generate`** with JSON body `{ "examTypeCode": "SAA-C03", "questionCount": 1 }` and **`LLM_ROLE_QUESTION_GENERATION_PROVIDER=mock`** returns `{ jobId, workflowId }` when testing without Ollama (requires API + Temporal + worker + migrated DB). Poll **`GET /jobs/:id`** for **`completedQuestionCount`**, **`targetQuestionCount`**, and **`generatedQuestionIds`**.
 - With Ollama + Gemma 4 configured, **`POST /jobs/generate`** exercises real JSON generation (quality depends on model and prompt).
