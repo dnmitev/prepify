@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { createDb } from "@prepify/db";
 import {
   attemptItems,
@@ -16,6 +16,7 @@ import {
 } from "@prepify/db";
 import { validateQuestionStructure } from "@prepify/shared";
 import { scoreAttempt, startAttempt, syncAttemptClock } from "./attempt-service.js";
+import { maxQuestionsPerJobFromEnv, parseQuestionCount } from "./parse-question-count.js";
 
 const env = process.env;
 
@@ -313,7 +314,14 @@ export async function buildServer(): Promise<FastifyInstance> {
       examTypeCode?: unknown;
       topicHint?: unknown;
       summarize?: unknown;
+      questionCount?: unknown;
     };
+
+    const maxQ = maxQuestionsPerJobFromEnv((k) => process.env[k]);
+    const qc = parseQuestionCount(body.questionCount, maxQ);
+    if (!qc.ok) {
+      return reply.code(400).send({ error: qc.error });
+    }
 
     const examTypeCode =
       typeof body.examTypeCode === "string" ? body.examTypeCode.trim() : "";
@@ -339,6 +347,8 @@ export async function buildServer(): Promise<FastifyInstance> {
       topic: null,
       examTypeCode,
       topicHint,
+      targetQuestionCount: qc.value,
+      completedQuestionCount: 0,
     });
 
     await client.workflow.start("generateQuestionWorkflow", {
@@ -350,6 +360,7 @@ export async function buildServer(): Promise<FastifyInstance> {
           examTypeCode,
           topicHint,
           summarize,
+          questionCount: qc.value,
           environmentLabel: env["APP_ENV"] ?? "development",
         },
       ],
@@ -362,10 +373,16 @@ export async function buildServer(): Promise<FastifyInstance> {
     const id = (req.params as { id: string }).id;
     const job = (await db.select().from(generationJobs).where(eq(generationJobs.id, id)))[0];
     if (!job) return reply.code(404).send({ error: "Not found" });
-    const genQ = (
-      await db.select({ id: questions.id }).from(questions).where(eq(questions.generationJobId, id)).limit(1)
-    )[0];
-    return { ...job, generatedQuestionId: genQ?.id ?? null };
+    const genQs = await db
+      .select({ id: questions.id })
+      .from(questions)
+      .where(eq(questions.generationJobId, id))
+      .orderBy(asc(questions.id));
+    return {
+      ...job,
+      generatedQuestionIds: genQs.map((q) => q.id),
+      generatedQuestionId: genQs[0]?.id ?? null,
+    };
   });
 
   return app;

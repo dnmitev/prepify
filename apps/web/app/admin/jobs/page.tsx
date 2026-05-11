@@ -14,6 +14,7 @@ export default function AdminJobsPage() {
   const [examCode, setExamCode] = useState("");
   const [topicHint, setTopicHint] = useState("");
   const [summarize, setSummarize] = useState(false);
+  const [questionCount, setQuestionCount] = useState(1);
   const [result, setResult] = useState<string>("");
 
   useEffect(() => {
@@ -30,18 +31,28 @@ export default function AdminJobsPage() {
 
   async function enqueue() {
     try {
-      const res = await apiSend<{ jobId?: string; workflowId?: string; error?: string }>(
-        "/jobs/generate",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            examTypeCode: examCode,
-            ...(topicHint.trim() ? { topicHint: topicHint.trim() } : {}),
-            summarize,
-          }),
-        },
-      );
-      setResult(JSON.stringify(res, null, 2));
+      const res = await apiSend<{
+        jobId?: string;
+        workflowId?: string;
+        error?: string;
+      }>("/jobs/generate", {
+        method: "POST",
+        body: JSON.stringify({
+          examTypeCode: examCode,
+          questionCount,
+          ...(topicHint.trim() ? { topicHint: topicHint.trim() } : {}),
+          summarize,
+        }),
+      });
+      let snapshot: Record<string, unknown> | null = null;
+      if (res.jobId) {
+        try {
+          snapshot = await apiGet<Record<string, unknown>>(`/jobs/${res.jobId}`);
+        } catch {
+          snapshot = null;
+        }
+      }
+      setResult(JSON.stringify(snapshot ? { enqueue: res, job: snapshot } : res, null, 2));
     } catch (e) {
       setResult(formatApiError(e));
     }
@@ -74,6 +85,17 @@ export default function AdminJobsPage() {
             ))
           )}
         </select>
+      </label>
+      <label style={{ display: "block", marginBottom: 8 }}>
+        Number of questions{" "}
+        <input
+          type="number"
+          min={1}
+          max={50}
+          value={questionCount}
+          onChange={(e) => setQuestionCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+          style={{ width: "100%", padding: 8 }}
+        />
       </label>
       <label style={{ display: "block", marginBottom: 8 }}>
         Optional topic hint{" "}

@@ -1,0 +1,2 @@
+ALTER TABLE "generation_jobs" ADD COLUMN "target_question_count" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "generation_jobs" ADD COLUMN "completed_question_count" integer DEFAULT 0 NOT NULL;

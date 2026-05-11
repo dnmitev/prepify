@@ -110,6 +110,8 @@ export async function generateQuestionItem(input: {
   summaryFromSummarization: string | null;
   environmentLabel: string;
   workflowId: string;
+  questionCount: number;
+  iterationIndex: number;
 }): Promise<{ ok: true; questionId: string }> {
   const cfg = roleConfig("question_generation");
 
@@ -151,6 +153,8 @@ export async function generateQuestionItem(input: {
       summaryBlock: input.summaryFromSummarization,
       provider: cfg.provider,
       model: cfg.model,
+      iterationIndex: input.iterationIndex,
+      questionCount: input.questionCount,
     });
 
     await recordUsage({
@@ -206,7 +210,12 @@ export async function generateQuestionItem(input: {
 
     await db
       .update(generationJobs)
-      .set({ status: "succeeded", updatedAt: new Date(), errorMessage: null })
+      .set({
+        completedQuestionCount: input.iterationIndex + 1,
+        status: input.iterationIndex + 1 >= input.questionCount ? "succeeded" : "running",
+        updatedAt: new Date(),
+        errorMessage: null,
+      })
       .where(eq(generationJobs.id, input.jobId));
 
     return { ok: true, questionId: qRow!.id };

@@ -43,6 +43,8 @@ export const generationJobs = pgTable("generation_jobs", {
   topic: text("topic"),
   examTypeCode: text("exam_type_code"),
   topicHint: text("topic_hint"),
+  targetQuestionCount: integer("target_question_count").notNull().default(1),
+  completedQuestionCount: integer("completed_question_count").notNull().default(0),
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

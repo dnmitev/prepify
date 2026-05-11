@@ -31,17 +31,25 @@ function mockRawPayload(params: {
   domains: ExamDomainRow[];
   topicHint: string | null;
   summaryBlock: string | null;
+  iterationIndex: number;
+  questionCount: number;
 }): unknown {
   let focus = params.topicHint?.trim() ?? "";
   if (!focus && params.summaryBlock?.trim()) {
     focus = params.summaryBlock.trim().slice(0, 120);
   }
   if (!focus) focus = "architecture trade-offs";
-  const primaryDomain = params.domains[0]?.code ?? "SECURE";
+  const primaryDomain =
+    params.domains[params.iterationIndex % params.domains.length]?.code ?? "SECURE";
+  const batchHint =
+    params.questionCount > 1 ?
+      ` Variation ${params.iterationIndex + 1} of ${params.questionCount}: use a distinct scenario from other batch items.`
+    : "";
   return {
     stem:
       `A solutions architect is designing a workload for ${params.examName} (${params.examTypeCode}). ` +
-      `Scenario focus: ${focus}. The design must minimize blast radius of credential misuse while preserving auditability. Which approach BEST satisfies these constraints?`,
+      `Scenario focus: ${focus}. The design must minimize blast radius of credential misuse while preserving auditability. Which approach BEST satisfies these constraints?` +
+      batchHint,
     format: "single" as const,
     domainCode: primaryDomain,
     options: [
@@ -83,6 +91,8 @@ function userPromptContent(params: {
   domains: ExamDomainRow[];
   topicHint: string | null;
   summaryBlock: string | null;
+  iterationIndex: number;
+  questionCount: number;
 }): string {
   const domainLines = params.domains
     .map((d) => `- ${d.code}: ${d.name} (${d.weightPercent}% weight)`)
@@ -95,6 +105,10 @@ function userPromptContent(params: {
     params.summaryBlock?.trim() ?
       `Prior summarized research notes:\n${params.summaryBlock.trim()}`
     : "No separate summarization step was run — rely on the exam blueprint and optional hint above.";
+  const batchLine =
+    params.questionCount > 1 ?
+      `\nBatch position: question ${params.iterationIndex + 1} of ${params.questionCount}. Produce a scenario clearly different from prior items in this batch (different service, constraint, or failure mode).\n`
+    : "";
   return `Exam: ${params.examName} (${params.examTypeCode})
 
 Domains (pick domainCode from this list only):
@@ -103,7 +117,7 @@ ${domainLines}
 ${hintLine}
 
 ${summarySection}
-
+${batchLine}
 Produce one question JSON object only. Prefer "single" unless the scenario clearly requires selecting multiple answers; if you use "multiple", mark at least two options isCorrect true.`;
 }
 
@@ -113,6 +127,8 @@ async function openAiRawPayload(params: {
   domains: ExamDomainRow[];
   topicHint: string | null;
   summaryBlock: string | null;
+  iterationIndex: number;
+  questionCount: number;
   model: string;
 }): Promise<{ raw: unknown; inputTokens: number; outputTokens: number }> {
   const base = process.env["OPENAI_BASE_URL"] ?? "https://api.openai.com/v1";
@@ -191,11 +207,23 @@ export async function runQuestionGenerationModel(params: {
   summaryBlock: string | null;
   provider: string;
   model: string;
+  iterationIndex?: number;
+  questionCount?: number;
 }): Promise<{ raw: unknown; inputTokens: number; outputTokens: number }> {
+  const iterationIndex = params.iterationIndex ?? 0;
+  const questionCount = params.questionCount ?? 1;
   const p = params.provider.toLowerCase();
   if (p === "mock") {
     return {
-      raw: mockRawPayload(params),
+      raw: mockRawPayload({
+        examTypeCode: params.examTypeCode,
+        examName: params.examName,
+        domains: params.domains,
+        topicHint: params.topicHint,
+        summaryBlock: params.summaryBlock,
+        iterationIndex,
+        questionCount,
+      }),
       inputTokens: 160,
       outputTokens: 520,
     };
@@ -207,6 +235,8 @@ export async function runQuestionGenerationModel(params: {
       domains: params.domains,
       topicHint: params.topicHint,
       summaryBlock: params.summaryBlock,
+      iterationIndex,
+      questionCount,
       model: params.model,
     });
   }
