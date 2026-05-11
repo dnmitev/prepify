@@ -1,0 +1,23 @@
+---
+description: Next.js web app conventions for Prepify
+globs: "apps/web/**/*"
+alwaysApply: false
+---
+
+# Web (`apps/web`)
+
+## Stack
+
+- **Next.js 15**, **React 19**, **App Router** under `app/`
+- **Playwright** for E2E (`e2e/`, `playwright.config.ts`)
+
+## Conventions
+
+- Use the **`@/*`** alias for imports within the web app (see `apps/web/tsconfig.json` `paths`).
+- Prefer **Server Components** by default; use **`"use client"`** only when the component needs browser-only APIs or client state — follow patterns in existing `app/` routes.
+- **API calls** to the backend should follow existing helpers (e.g. `lib/api.ts`) rather than ad-hoc `fetch` scattered with duplicated base URLs.
+- Co-locate route-specific UI under the relevant `app/**` segment; keep shared UI/utilities in `lib/` or small modules as the app already does.
+
+## Checks
+
+- From repo root: `npm run test:e2e` (or workspace equivalent) when changing flows covered by Playwright.

@@ -1,0 +1,32 @@
+---
+description: Prepify monorepo layout, workflows, and agent expectations
+alwaysApply: true
+---
+
+# Prepify (monorepo)
+
+## Layout
+
+- **apps/web** — Next.js 15 (`@prepify/web`), App Router, path alias `@/*` from `apps/web`
+- **apps/api** — Fastify HTTP API (`@prepify/api`), Vitest, integration tests with Testcontainers
+- **apps/worker** — Temporal worker (`@prepify/worker`), workflows and activities
+- **packages/db** — Drizzle ORM + Postgres (`@prepify/db`), migrations via `drizzle-kit`
+- **packages/shared** — Shared types and domain helpers (`@prepify/shared`)
+
+Workspaces use **npm** (`package-lock.json`). Internal imports use `@prepify/*` package names.
+
+## Commands (from repo root)
+
+- Lint: `npm run lint`
+- Format: `npm run format`
+- Tests (all workspaces): `npm run test`
+- API integration: `npm run test:integration`
+- Web E2E: `npm run test:e2e`
+- DB: `npm run db:generate`, `npm run db:migrate`, `npm run db:seed`
+- Dev (typical): run API and web in separate terminals — see `npm run dev` script message in root `package.json`
+
+## Agent behavior
+
+- Prefer **minimal, task-scoped** changes; match existing patterns in the nearest package.
+- Do **not** commit or suggest committing `.env` / secrets (see root `.gitignore`).
+- **Knowledge graph:** `graphify-out/` is generated metadata. For big-picture codebase questions, read `graphify-out/GRAPH_REPORT.md` when present; after substantive code edits, run `graphify update .` if graphify is installed.

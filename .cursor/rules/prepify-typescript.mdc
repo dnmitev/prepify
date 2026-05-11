@@ -1,0 +1,23 @@
+---
+description: TypeScript and ESLint conventions for Prepify
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# TypeScript & linting
+
+Root `tsconfig.json` applies to Node packages: **strict**, **`noUncheckedIndexedAccess`**, **`noUnusedLocals`**, **`noUnusedParameters`**, **`module` / `moduleResolution`: `NodeNext`**, ES2022.
+
+`apps/web` extends the root config with **`jsx: "preserve"`**, DOM libs, **`noEmit: true`**, and Next’s TS plugin.
+
+## Practices
+
+- Respect **indexed access** possibly being `undefined`; narrow or use safe defaults instead of non-null assertions unless already idiomatic in the file.
+- Keep **`import`/`export` syntax** consistent with **ESM** (`"type": "module"` where set in `package.json`).
+- Run **`npm run lint`** after non-trivial edits; ESLint uses **typescript-eslint `strictTypeChecked`** with **`projectService: true`** (see root `eslint.config.js`).
+- Prefer **Zod** (and existing validators) for runtime validation on the API where the codebase already does.
+
+## Anti-patterns
+
+- Avoid `any` and unchecked `as` casts to silence errors.
+- Do not add new dependencies without a clear need; prefer workspace packages (`@prepify/shared`, `@prepify/db`).
