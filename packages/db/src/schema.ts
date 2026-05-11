@@ -41,6 +41,8 @@ export const generationJobs = pgTable("generation_jobs", {
   temporalWorkflowId: text("temporal_workflow_id").notNull(),
   status: text("status").notNull(), // queued | running | succeeded | failed
   topic: text("topic"),
+  examTypeCode: text("exam_type_code"),
+  topicHint: text("topic_hint"),
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

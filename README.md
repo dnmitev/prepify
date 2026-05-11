@@ -73,6 +73,8 @@ npm run dev -w @prepify/worker
 
 Without Temporal running, **`POST /jobs/generate`** returns **503**. Optional UI: **Temporal Web** at `http://localhost:8080`.
 
+**Breaking change:** **`POST /jobs/generate`** now requires **`examTypeCode`** (a seeded catalog code such as **`SAA-C03`**). Requests that only send the legacy **`topic`** field will receive **400**. Optional fields: **`topicHint`** (narrowing focus), **`summarize`** (**boolean**, default **false** — set **`true`** to run the optional small-model summarization step before generation).
+
 ### Local LLM — Ollama + Gemma 4
 
 Default `.env.example` targets **[Ollama](https://ollama.com/)**’s OpenAI-compatible API and **Gemma 4**:
@@ -93,7 +95,7 @@ If Ollama is not running, switch generation to **mock** using the commented bloc
 
 - `docker compose up -d` — app Postgres + Temporal + UI up.
 - Temporal Web UI loads at `http://localhost:8080`.
-- **`POST /jobs/generate`** with **`LLM_ROLE_QUESTION_GENERATION_PROVIDER=mock`** returns `{ jobId, workflowId }` when testing without Ollama (requires API + Temporal + worker + migrated DB).
+- **`POST /jobs/generate`** with JSON body `{ "examTypeCode": "SAA-C03" }` and **`LLM_ROLE_QUESTION_GENERATION_PROVIDER=mock`** returns `{ jobId, workflowId }` when testing without Ollama (requires API + Temporal + worker + migrated DB).
 - With Ollama + Gemma 4 configured, **`POST /jobs/generate`** exercises real JSON generation (quality depends on model and prompt).
 
 ## Testing

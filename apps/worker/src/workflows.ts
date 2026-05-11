@@ -8,10 +8,32 @@ const { summarizeTopic, generateQuestionItem } = proxyActivities<typeof acts>({
 
 export async function generateQuestionWorkflow(input: {
   jobId: string;
-  topic: string;
+  examTypeCode: string;
+  topicHint?: string | null;
+  summarize: boolean;
   environmentLabel: string;
 }): Promise<void> {
   const wf = workflowInfo().workflowId;
-  const summary = await summarizeTopic({ ...input, workflowId: wf });
-  await generateQuestionItem({ ...input, summary, workflowId: wf });
+
+  let summaryFromSummarization: string | null = null;
+  if (input.summarize) {
+    const topicForSummarize = input.topicHint?.trim() || input.examTypeCode;
+    summaryFromSummarization = await summarizeTopic({
+      jobId: input.jobId,
+      topic: topicForSummarize,
+      examTypeCode: input.examTypeCode,
+      environmentLabel: input.environmentLabel,
+      workflowId: wf,
+    });
+  }
+
+  await generateQuestionItem({
+    jobId: input.jobId,
+    examTypeCode: input.examTypeCode,
+    topicHint: input.topicHint ?? null,
+    summarize: input.summarize,
+    summaryFromSummarization,
+    environmentLabel: input.environmentLabel,
+    workflowId: wf,
+  });
 }

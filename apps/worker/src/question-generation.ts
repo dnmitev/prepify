@@ -1,10 +1,14 @@
 import { allowsMissingOpenAiApiKey } from "@prepify/shared";
 
-const JSON_CONTRACT = `Return a single JSON object with this shape:
+export type ExamDomainRow = { code: string; name: string; weightPercent: number };
+
+function jsonContract(domainCodes: readonly string[]): string {
+  const codesUnion = domainCodes.map((c) => `"${c}"`).join(" | ");
+  return `Return a single JSON object with this shape:
 {
   "stem": string (exam-style scenario, >= 40 chars),
   "format": "single" | "multiple",
-  "domainCode": "SECURE" | "RESILIENT" | "PERF" | "COST",
+  "domainCode": ${codesUnion},
   "options": [
     {
       "position": number (0-based, contiguous from 0),
@@ -17,16 +21,29 @@ const JSON_CONTRACT = `Return a single JSON object with this shape:
 Rules:
 - For "single", exactly one option has isCorrect true; for "multiple", two or more.
 - Each correct option MUST have explanation with at least 20 characters of rationale (why it is the best answer).
-- Provide four options (positions 0-3) unless multi-select needs more (still at least 4).`;
+- Provide four options (positions 0-3) unless multi-select needs more (still at least 4).
+- domainCode MUST be exactly one of: ${domainCodes.join(", ")}.`;
+}
 
-function mockRawPayload(topic: string, summary: string): unknown {
-  const s = summary.trim() || "architecture trade-offs";
+function mockRawPayload(params: {
+  examTypeCode: string;
+  examName: string;
+  domains: ExamDomainRow[];
+  topicHint: string | null;
+  summaryBlock: string | null;
+}): unknown {
+  let focus = params.topicHint?.trim() ?? "";
+  if (!focus && params.summaryBlock?.trim()) {
+    focus = params.summaryBlock.trim().slice(0, 120);
+  }
+  if (!focus) focus = "architecture trade-offs";
+  const primaryDomain = params.domains[0]?.code ?? "SECURE";
   return {
     stem:
-      `A solutions architect is designing ${topic} for a regulated workload. Context from discovery: ${s.slice(0, 160)}. ` +
-      `The design must minimize blast radius of credential misuse while preserving auditability. Which approach BEST satisfies these constraints?`,
+      `A solutions architect is designing a workload for ${params.examName} (${params.examTypeCode}). ` +
+      `Scenario focus: ${focus}. The design must minimize blast radius of credential misuse while preserving auditability. Which approach BEST satisfies these constraints?`,
     format: "single" as const,
-    domainCode: "SECURE" as const,
+    domainCode: primaryDomain,
     options: [
       {
         position: 0,
@@ -60,9 +77,42 @@ function mockRawPayload(topic: string, summary: string): unknown {
   };
 }
 
+function userPromptContent(params: {
+  examTypeCode: string;
+  examName: string;
+  domains: ExamDomainRow[];
+  topicHint: string | null;
+  summaryBlock: string | null;
+}): string {
+  const domainLines = params.domains
+    .map((d) => `- ${d.code}: ${d.name} (${d.weightPercent}% weight)`)
+    .join("\n");
+  const hintLine =
+    params.topicHint?.trim() ?
+      `Optional scenario focus (narrowing hint): ${params.topicHint.trim()}`
+    : "Optional scenario focus (narrowing hint): (none)";
+  const summarySection =
+    params.summaryBlock?.trim() ?
+      `Prior summarized research notes:\n${params.summaryBlock.trim()}`
+    : "No separate summarization step was run — rely on the exam blueprint and optional hint above.";
+  return `Exam: ${params.examName} (${params.examTypeCode})
+
+Domains (pick domainCode from this list only):
+${domainLines}
+
+${hintLine}
+
+${summarySection}
+
+Produce one question JSON object only.`;
+}
+
 async function openAiRawPayload(params: {
-  topic: string;
-  summary: string;
+  examTypeCode: string;
+  examName: string;
+  domains: ExamDomainRow[];
+  topicHint: string | null;
+  summaryBlock: string | null;
   model: string;
 }): Promise<{ raw: unknown; inputTokens: number; outputTokens: number }> {
   const base = process.env["OPENAI_BASE_URL"] ?? "https://api.openai.com/v1";
@@ -75,6 +125,7 @@ async function openAiRawPayload(params: {
   }
   const url = `${base.replace(/\/$/, "")}/chat/completions`;
 
+  const domainCodes = params.domains.map((d) => d.code);
   const body = {
     model: params.model,
     temperature: 0.35,
@@ -82,11 +133,11 @@ async function openAiRawPayload(params: {
     messages: [
       {
         role: "system" as const,
-        content: `You write AWS certification-style questions for SAA-C03. ${JSON_CONTRACT}`,
+        content: `You write certification-style multiple-choice questions aligned to the exam blueprint. ${jsonContract(domainCodes)}`,
       },
       {
         role: "user" as const,
-        content: `Topic focus: ${params.topic}\nPrior summary context:\n${params.summary}\nProduce one question JSON only.`,
+        content: userPromptContent(params),
       },
     ],
   };
@@ -130,25 +181,32 @@ async function openAiRawPayload(params: {
   return { raw, inputTokens, outputTokens };
 }
 
-/** Calls summarization-sized mock or OpenAI for structured question JSON (validated by caller). */
+/** Calls mock or OpenAI-compatible endpoint for structured question JSON (validated by caller). */
 export async function runQuestionGenerationModel(params: {
-  topic: string;
-  summary: string;
+  examTypeCode: string;
+  examName: string;
+  domains: ExamDomainRow[];
+  topicHint: string | null;
+  /** Non-null when summarization ran; omitted content when summarization was skipped. */
+  summaryBlock: string | null;
   provider: string;
   model: string;
 }): Promise<{ raw: unknown; inputTokens: number; outputTokens: number }> {
   const p = params.provider.toLowerCase();
   if (p === "mock") {
     return {
-      raw: mockRawPayload(params.topic, params.summary),
+      raw: mockRawPayload(params),
       inputTokens: 160,
       outputTokens: 520,
     };
   }
   if (p === "openai") {
     return openAiRawPayload({
-      topic: params.topic,
-      summary: params.summary,
+      examTypeCode: params.examTypeCode,
+      examName: params.examName,
+      domains: params.domains,
+      topicHint: params.topicHint,
+      summaryBlock: params.summaryBlock,
       model: params.model,
     });
   }

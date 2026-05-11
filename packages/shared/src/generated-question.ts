@@ -16,8 +16,14 @@ export type GeneratedQuestionOptionInput = {
 export type GeneratedQuestionPayload = {
   stem: string;
   format: QuestionFormat;
-  domainCode: GenerationDomainCode;
+  /** Domain code from the exam catalog (validated against allowed codes when provided). */
+  domainCode: string;
   options: GeneratedQuestionOptionInput[];
+};
+
+export type ValidateGeneratedQuestionOptions = {
+  /** When set, `domainCode` must be one of these (defaults to SAA-style GENERATION_DOMAIN_CODES). */
+  allowedDomainCodes?: readonly string[];
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -25,13 +31,17 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /** Validates JSON-shaped LLM output before persistence. */
-export function validateGeneratedQuestionPayload(raw: unknown): {
+export function validateGeneratedQuestionPayload(
+  raw: unknown,
+  validationOptions?: ValidateGeneratedQuestionOptions,
+): {
   ok: true;
   value: GeneratedQuestionPayload;
 } | {
   ok: false;
   errors: string[];
 } {
+  const allowedDomainCodes = validationOptions?.allowedDomainCodes ?? GENERATION_DOMAIN_CODES;
   const errors: string[] = [];
   if (!isRecord(raw)) {
     return { ok: false, errors: ["Payload must be a JSON object."] };
@@ -48,11 +58,8 @@ export function validateGeneratedQuestionPayload(raw: unknown): {
   }
 
   const domainCode = raw["domainCode"];
-  if (
-    typeof domainCode !== "string" ||
-    !(GENERATION_DOMAIN_CODES as readonly string[]).includes(domainCode)
-  ) {
-    errors.push(`domainCode must be one of: ${GENERATION_DOMAIN_CODES.join(", ")}.`);
+  if (typeof domainCode !== "string" || !(allowedDomainCodes as readonly string[]).includes(domainCode)) {
+    errors.push(`domainCode must be one of: ${allowedDomainCodes.join(", ")}.`);
   }
 
   const optsRaw = raw["options"];
@@ -61,7 +68,7 @@ export function validateGeneratedQuestionPayload(raw: unknown): {
     return { ok: false, errors };
   }
 
-  const options: GeneratedQuestionOptionInput[] = [];
+  const parsedOptions: GeneratedQuestionOptionInput[] = [];
   for (const item of optsRaw) {
     if (!isRecord(item)) {
       errors.push("Each option must be an object.");
@@ -91,7 +98,7 @@ export function validateGeneratedQuestionPayload(raw: unknown): {
       errors.push("explanation must be a string when present.");
       continue;
     }
-    options.push({
+    parsedOptions.push({
       position,
       text: text.trim(),
       isCorrect,
@@ -103,18 +110,18 @@ export function validateGeneratedQuestionPayload(raw: unknown): {
   if (
     errors.length === 0 &&
     (format === "single" || format === "multiple") &&
-    options.length >= 2
+    parsedOptions.length >= 2
   ) {
     structureResult = validateQuestionStructure({
       format: format as QuestionFormat,
-      options: options.map((o) => ({ position: o.position, isCorrect: o.isCorrect })),
+      options: parsedOptions.map((o) => ({ position: o.position, isCorrect: o.isCorrect })),
     });
   }
   if (!structureResult.ok) {
     errors.push(...structureResult.errors);
   }
 
-  const correct = options.filter((o) => o.isCorrect);
+  const correct = parsedOptions.filter((o) => o.isCorrect);
   for (const c of correct) {
     const ex = c.explanation?.trim() ?? "";
     if (ex.length < 20) {
@@ -134,8 +141,8 @@ export function validateGeneratedQuestionPayload(raw: unknown): {
     value: {
       stem: (stem as string).trim(),
       format: format as QuestionFormat,
-      domainCode: domainCode as GenerationDomainCode,
-      options,
+      domainCode: domainCode as string,
+      options: parsedOptions,
     },
   };
 }

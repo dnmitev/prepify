@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { DbClient } from "@prepify/db";
 import {
   createDb,
@@ -77,6 +77,7 @@ function roleConfig(role: "summarization" | "question_generation") {
 export async function summarizeTopic(input: {
   jobId: string;
   topic: string;
+  examTypeCode: string;
   environmentLabel: string;
   workflowId: string;
 }): Promise<string> {
@@ -98,22 +99,56 @@ export async function summarizeTopic(input: {
     outputTokens: 16,
   });
 
-  return `Summary for "${input.topic}" (mock summarization).`;
+  return `Summary for "${input.topic}" on ${input.examTypeCode} (mock summarization).`;
 }
 
 export async function generateQuestionItem(input: {
   jobId: string;
-  topic: string;
+  examTypeCode: string;
+  topicHint: string | null;
+  summarize: boolean;
+  summaryFromSummarization: string | null;
   environmentLabel: string;
-  summary: string;
   workflowId: string;
 }): Promise<{ ok: true; questionId: string }> {
   const cfg = roleConfig("question_generation");
 
   try {
+    const db = getDb();
+
+    if (!input.summarize) {
+      await db
+        .update(generationJobs)
+        .set({ status: "running", updatedAt: new Date() })
+        .where(eq(generationJobs.id, input.jobId));
+    }
+
+    const exam = (await db.select().from(examTypes).where(eq(examTypes.code, input.examTypeCode)))[0];
+    if (!exam) {
+      throw new Error(`Exam type "${input.examTypeCode}" not found — run migrations and seed.`);
+    }
+
+    const domainRows = await db
+      .select({
+        code: domains.code,
+        name: domains.name,
+        weightPercent: domains.weightPercent,
+      })
+      .from(domains)
+      .where(eq(domains.examTypeId, exam.id))
+      .orderBy(asc(domains.code));
+
+    const allowedCodes = domainRows.map((d) => d.code);
+    if (allowedCodes.length === 0) {
+      throw new Error(`No domains configured for exam "${input.examTypeCode}".`);
+    }
+
     const { raw, inputTokens, outputTokens } = await runQuestionGenerationModel({
-      topic: input.topic,
-      summary: input.summary,
+      examTypeCode: input.examTypeCode,
+      examName: exam.name,
+      domains: domainRows,
+      topicHint: input.topicHint,
+      summaryBlock: input.summaryFromSummarization,
       provider: cfg.provider,
       model: cfg.model,
     });
@@ -130,24 +165,18 @@ export async function generateQuestionItem(input: {
       outputTokens,
     });
 
-    const parsed = validateGeneratedQuestionPayload(raw);
+    const parsed = validateGeneratedQuestionPayload(raw, { allowedDomainCodes: allowedCodes });
     if (!parsed.ok) {
       throw new Error(`Generation validation failed: ${parsed.errors.join("; ")}`);
     }
 
-    const db = getDb();
-    const exam = (await db.select().from(examTypes).where(eq(examTypes.code, "SAA-C03")))[0];
-    if (!exam) {
-      throw new Error("SAA-C03 exam type missing — run migrations and seed.");
-    }
-
-    const domain = (
+    const domainRow = (
       await db
         .select()
         .from(domains)
         .where(and(eq(domains.examTypeId, exam.id), eq(domains.code, parsed.value.domainCode)))
     )[0];
-    if (!domain) {
+    if (!domainRow) {
       throw new Error(`Domain ${parsed.value.domainCode} not found`);
     }
 
@@ -157,7 +186,7 @@ export async function generateQuestionItem(input: {
       .insert(questions)
       .values({
         examTypeId: exam.id,
-        domainId: domain.id,
+        domainId: domainRow.id,
         stem: parsed.value.stem,
         format: parsed.value.format,
         provenance: "ai-generated",

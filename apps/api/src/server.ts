@@ -301,7 +301,6 @@ export async function buildServer(): Promise<FastifyInstance> {
       return reply.code(503).send({ error: "TEMPORAL_ADDRESS not configured" });
     }
 
-    const body = req.body as { topic?: string };
     const { Connection, Client } = await import("@temporalio/client");
     const connection = await Connection.connect({ address: temporalAddress });
     const client = new Client({ connection, namespace: env["TEMPORAL_NAMESPACE"] ?? "default" });
@@ -310,11 +309,36 @@ export async function buildServer(): Promise<FastifyInstance> {
     const workflowId = jobId;
     const taskQueue = env["TEMPORAL_TASK_QUEUE"] ?? "prepify-main";
 
+    const body = req.body as {
+      examTypeCode?: unknown;
+      topicHint?: unknown;
+      summarize?: unknown;
+    };
+
+    const examTypeCode =
+      typeof body.examTypeCode === "string" ? body.examTypeCode.trim() : "";
+    if (!examTypeCode) {
+      return reply.code(400).send({
+        error: "examTypeCode is required (legacy { topic } only requests are no longer supported)",
+      });
+    }
+
+    const examRow = (await db.select().from(examTypes).where(eq(examTypes.code, examTypeCode)))[0];
+    if (!examRow) {
+      return reply.code(400).send({ error: `Unknown exam type code: ${examTypeCode}` });
+    }
+
+    const topicHint =
+      typeof body.topicHint === "string" && body.topicHint.trim() ? body.topicHint.trim() : null;
+    const summarize = body.summarize === true;
+
     await db.insert(generationJobs).values({
       id: jobId,
       temporalWorkflowId: workflowId,
       status: "queued",
-      topic: body.topic ?? null,
+      topic: null,
+      examTypeCode,
+      topicHint,
     });
 
     await client.workflow.start("generateQuestionWorkflow", {
@@ -323,7 +347,9 @@ export async function buildServer(): Promise<FastifyInstance> {
       args: [
         {
           jobId,
-          topic: body.topic ?? "SAA-C03 question",
+          examTypeCode,
+          topicHint,
+          summarize,
           environmentLabel: env["APP_ENV"] ?? "development",
         },
       ],
