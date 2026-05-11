@@ -33,6 +33,29 @@ a {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.card-wide {
+  max-width: min(1100px, 100%);
+}
+
+.history-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.history-grid th,
+.history-grid td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  vertical-align: top;
+}
+
+.history-grid th {
+  font-weight: 600;
+  opacity: 0.9;
+}
+
 button {
   cursor: pointer;
   padding: 8px 12px;

@@ -36,6 +36,9 @@ export default async function HomePage() {
       ) : null}
       <ul>
         <li>
+          <Link href="/history">Attempt history</Link>
+        </li>
+        <li>
           <Link href="/exam">Start SAA-C03 practice</Link>
         </li>
         <li>

@@ -15,7 +15,15 @@ import {
   responses,
 } from "@prepify/db";
 import { validateQuestionStructure } from "@prepify/shared";
-import { listResumableAttempts, scoreAttempt, startAttempt, syncAttemptClock } from "./attempt-service.js";
+import {
+  clampHistoryPage,
+  clampHistoryPageSize,
+  listAttemptsHistory,
+  listResumableAttempts,
+  scoreAttempt,
+  startAttempt,
+  syncAttemptClock,
+} from "./attempt-service.js";
 import { maxQuestionsPerJobFromEnv, parseQuestionCount } from "./parse-question-count.js";
 
 const env = process.env;
@@ -148,6 +156,13 @@ export async function buildServer(): Promise<FastifyInstance> {
       app.log.error(e);
       return reply.code(400).send({ error: (e as Error).message });
     }
+  });
+
+  app.get("/attempts/history", async (req) => {
+    const q = req.query as { page?: string; pageSize?: string };
+    const page = clampHistoryPage(q.page);
+    const pageSize = clampHistoryPageSize(q.pageSize);
+    return listAttemptsHistory(db, { page, pageSize });
   });
 
   app.get("/attempts", async () => {

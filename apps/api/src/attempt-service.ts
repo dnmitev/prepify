@@ -117,6 +117,124 @@ export async function listResumableAttempts(
   return out;
 }
 
+const HISTORY_MAX_PAGE_SIZE = 100;
+const HISTORY_DEFAULT_PAGE_SIZE = 20;
+
+export type AttemptHistoryItem = {
+  id: string;
+  examTypeCode: string;
+  status: string;
+  remainingActiveSeconds: number;
+  scaledScore: number | null;
+  passed: boolean | null;
+  createdAt: Date;
+  submittedAt: Date | null;
+  lastActivityAt: Date;
+};
+
+export type AttemptHistoryPage = {
+  items: AttemptHistoryItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+/**
+ * Paginated attempt history (all statuses), newest first.
+ * Syncs clock for **active** rows on this page only.
+ */
+export async function listAttemptsHistory(
+  db: DbClient,
+  opts: { page: number; pageSize: number },
+  now = new Date(),
+): Promise<AttemptHistoryPage> {
+  const pageSize = Math.min(
+    Math.max(Math.floor(opts.pageSize), 1),
+    HISTORY_MAX_PAGE_SIZE,
+  );
+  let page = Math.max(Math.floor(opts.page), 1);
+
+  const [countRow] = await db.select({ value: count() }).from(attempts);
+  const rawCount = countRow?.value ?? 0;
+  const total = typeof rawCount === "bigint" ? Number(rawCount) : rawCount;
+  const totalPages = total === 0 ? 1 : Math.ceil(total / pageSize);
+  if (total > 0) {
+    page = Math.min(page, totalPages);
+  } else {
+    page = 1;
+  }
+  const offset = (page - 1) * pageSize;
+
+  const baseRows = await db
+    .select({
+      attemptId: attempts.id,
+      examTypeCode: examTypes.code,
+      status: attempts.status,
+      remainingActiveSeconds: attempts.remainingActiveSeconds,
+      scaledScore: attempts.scaledScore,
+      passed: attempts.passed,
+      createdAt: attempts.createdAt,
+      submittedAt: attempts.submittedAt,
+      lastActivityAt: attempts.lastActivityAt,
+    })
+    .from(attempts)
+    .innerJoin(examTypes, eq(attempts.examTypeId, examTypes.id))
+    .orderBy(desc(attempts.createdAt))
+    .limit(pageSize)
+    .offset(offset);
+
+  const items: AttemptHistoryItem[] = [];
+  for (const row of baseRows) {
+    if (row.status === "active") {
+      const synced = await syncAttemptClock(db, row.attemptId, now);
+      items.push({
+        id: synced.id,
+        examTypeCode: row.examTypeCode,
+        status: synced.status,
+        remainingActiveSeconds: synced.remainingActiveSeconds,
+        scaledScore: synced.scaledScore,
+        passed: synced.passed,
+        createdAt: synced.createdAt,
+        submittedAt: synced.submittedAt,
+        lastActivityAt: synced.lastActivityAt,
+      });
+    } else {
+      items.push({
+        id: row.attemptId,
+        examTypeCode: row.examTypeCode,
+        status: row.status,
+        remainingActiveSeconds: row.remainingActiveSeconds,
+        scaledScore: row.scaledScore,
+        passed: row.passed,
+        createdAt: row.createdAt,
+        submittedAt: row.submittedAt,
+        lastActivityAt: row.lastActivityAt,
+      });
+    }
+  }
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages,
+  };
+}
+
+export function clampHistoryPageSize(raw: string | undefined): number {
+  const n = Number.parseInt(raw ?? "", 10);
+  if (Number.isNaN(n)) return HISTORY_DEFAULT_PAGE_SIZE;
+  return Math.min(Math.max(n, 1), HISTORY_MAX_PAGE_SIZE);
+}
+
+export function clampHistoryPage(raw: string | undefined): number {
+  const n = Number.parseInt(raw ?? "", 10);
+  if (Number.isNaN(n)) return 1;
+  return Math.max(n, 1);
+}
+
 export async function startAttempt(db: DbClient, examTypeCode: string) {
   const exam = (await db.select().from(examTypes).where(eq(examTypes.code, examTypeCode)))[0];
   if (!exam) throw new Error("Exam type not found");
