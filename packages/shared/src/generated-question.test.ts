@@ -1,0 +1,57 @@
+import { describe, expect, it } from "vitest";
+import { validateGeneratedQuestionPayload } from "./generated-question.js";
+
+describe("validateGeneratedQuestionPayload", () => {
+  it("accepts a well-formed single-select item with reasoning on the correct option", () => {
+    const r = validateGeneratedQuestionPayload({
+      stem:
+        "A company runs an API behind Amazon API Gateway and wants to throttle abusive clients per API key without maintaining server-side sessions. What should the architect do?",
+      format: "single",
+      domainCode: "SECURE",
+      options: [
+        {
+          position: 0,
+          text: "Use a Lambda authorizer only.",
+          isCorrect: false,
+          explanation: "Authorizers authenticate; they do not provide built-in per-key throttling.",
+        },
+        {
+          position: 1,
+          text: "Enable usage plans and API keys on API Gateway with throttling limits.",
+          isCorrect: true,
+          explanation:
+            "Usage plans tie API keys to per-stage throttling and quota limits, matching per-client rate control at the edge.",
+        },
+        {
+          position: 2,
+          text: "Move throttling to ALB listener rules.",
+          isCorrect: false,
+          explanation: "ALB can throttle broadly but not as cleanly per API key as API Gateway usage plans.",
+        },
+        {
+          position: 3,
+          text: "Disable API caching.",
+          isCorrect: false,
+          explanation: "Caching affects latency and cost, not abusive traffic shaping per key.",
+        },
+      ],
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects missing reasoning on correct answers", () => {
+    const r = validateGeneratedQuestionPayload({
+      stem:
+        "A company runs an API behind Amazon API Gateway and wants to throttle abusive clients per API key without maintaining server-side sessions. What should the architect do?",
+      format: "single",
+      domainCode: "SECURE",
+      options: [
+        { position: 0, text: "A", isCorrect: false },
+        { position: 1, text: "B", isCorrect: true, explanation: "short" },
+        { position: 2, text: "C", isCorrect: false },
+        { position: 3, text: "D", isCorrect: false },
+      ],
+    });
+    expect(r.ok).toBe(false);
+  });
+});

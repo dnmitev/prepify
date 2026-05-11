@@ -1,0 +1,141 @@
+import type { QuestionFormat } from "./question-validation.js";
+import { validateQuestionStructure } from "./question-validation.js";
+
+/** Domain codes used by SAA-C03 seed — generation must pick one. */
+export const GENERATION_DOMAIN_CODES = ["SECURE", "RESILIENT", "PERF", "COST"] as const;
+export type GenerationDomainCode = (typeof GENERATION_DOMAIN_CODES)[number];
+
+export type GeneratedQuestionOptionInput = {
+  position: number;
+  text: string;
+  isCorrect: boolean;
+  /** Required on correct option(s): reasoning why that answer is right (exam-style rationale). */
+  explanation?: string | null;
+};
+
+export type GeneratedQuestionPayload = {
+  stem: string;
+  format: QuestionFormat;
+  domainCode: GenerationDomainCode;
+  options: GeneratedQuestionOptionInput[];
+};
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** Validates JSON-shaped LLM output before persistence. */
+export function validateGeneratedQuestionPayload(raw: unknown): {
+  ok: true;
+  value: GeneratedQuestionPayload;
+} | {
+  ok: false;
+  errors: string[];
+} {
+  const errors: string[] = [];
+  if (!isRecord(raw)) {
+    return { ok: false, errors: ["Payload must be a JSON object."] };
+  }
+
+  const stem = raw["stem"];
+  if (typeof stem !== "string" || stem.trim().length < 40) {
+    errors.push("stem must be a non-empty scenario string (at least 40 characters).");
+  }
+
+  const format = raw["format"];
+  if (format !== "single" && format !== "multiple") {
+    errors.push('format must be "single" or "multiple".');
+  }
+
+  const domainCode = raw["domainCode"];
+  if (
+    typeof domainCode !== "string" ||
+    !(GENERATION_DOMAIN_CODES as readonly string[]).includes(domainCode)
+  ) {
+    errors.push(`domainCode must be one of: ${GENERATION_DOMAIN_CODES.join(", ")}.`);
+  }
+
+  const optsRaw = raw["options"];
+  if (!Array.isArray(optsRaw)) {
+    errors.push("options must be an array.");
+    return { ok: false, errors };
+  }
+
+  const options: GeneratedQuestionOptionInput[] = [];
+  for (const item of optsRaw) {
+    if (!isRecord(item)) {
+      errors.push("Each option must be an object.");
+      continue;
+    }
+    const position = item["position"];
+    const text = item["text"];
+    const isCorrect = item["isCorrect"];
+    const explanation = item["explanation"];
+    if (typeof position !== "number" || !Number.isInteger(position) || position < 0) {
+      errors.push("Each option needs a non-negative integer position.");
+      continue;
+    }
+    if (typeof text !== "string" || text.trim().length < 4) {
+      errors.push("Each option needs option text.");
+      continue;
+    }
+    if (typeof isCorrect !== "boolean") {
+      errors.push("Each option needs isCorrect boolean.");
+      continue;
+    }
+    if (
+      explanation !== undefined &&
+      explanation !== null &&
+      typeof explanation !== "string"
+    ) {
+      errors.push("explanation must be a string when present.");
+      continue;
+    }
+    options.push({
+      position,
+      text: text.trim(),
+      isCorrect,
+      explanation: typeof explanation === "string" ? explanation : null,
+    });
+  }
+
+  let structureResult = { ok: false, errors: ["Skipped structure check."] as string[] };
+  if (
+    errors.length === 0 &&
+    (format === "single" || format === "multiple") &&
+    options.length >= 2
+  ) {
+    structureResult = validateQuestionStructure({
+      format: format as QuestionFormat,
+      options: options.map((o) => ({ position: o.position, isCorrect: o.isCorrect })),
+    });
+  }
+  if (!structureResult.ok) {
+    errors.push(...structureResult.errors);
+  }
+
+  const correct = options.filter((o) => o.isCorrect);
+  for (const c of correct) {
+    const ex = c.explanation?.trim() ?? "";
+    if (ex.length < 20) {
+      errors.push(
+        "Each correct option must include explanation (≥20 chars) describing why it is correct.",
+      );
+      break;
+    }
+  }
+
+  if (errors.length > 0) {
+    return { ok: false, errors };
+  }
+
+  return {
+    ok: true,
+    value: {
+      stem: (stem as string).trim(),
+      format: format as QuestionFormat,
+      domainCode: domainCode as GenerationDomainCode,
+      options,
+    },
+  };
+}

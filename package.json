@@ -1,0 +1,30 @@
+{
+  "name": "prepify",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev": "echo \"Run api and web in separate terminals: npm run dev -w @prepify/api && npm run dev -w @prepify/web\"",
+    "lint": "eslint .",
+    "format": "prettier -w .",
+    "test": "npm run test --workspaces --if-present",
+    "test:integration": "npm run test:integration -w @prepify/api",
+    "db:generate": "npm run generate -w @prepify/db",
+    "db:migrate": "npm run migrate -w @prepify/db",
+    "db:seed": "npm run seed -w @prepify/db",
+    "test:e2e": "npm run test:e2e -w @prepify/web"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^3.0.5"
+  }
+}

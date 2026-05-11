@@ -1,0 +1,31 @@
+schema: spec-driven
+
+# Shown to AI when creating / updating OpenSpec artifacts (proposal, specs, design, tasks).
+context: |
+  Prepify monorepo (npm workspaces): apps/web, apps/api, apps/worker, packages/db, packages/shared.
+
+  Incremental delivery — commit and verify after every meaningful step:
+  - Prefer **one git commit per completed task** (or per small, reviewable slice). Use clear messages, e.g.
+    `feat(db): add migration for …` or `test(shared): cover generated question validation`.
+  - After implementation work, **run tests before committing**:
+    - Default gate: `npm test --workspaces --if-present`
+    - After touching a single package heavily: `npm test -w @prepify/<workspace>` when faster.
+    - Build gate before pushing or when changing TS/build graph: `npm run build --workspaces --if-present`
+  - Optional but recommended before merge: `npm run lint` if configured locally.
+  - Playwright (`npm run test:e2e -w @prepify/web`) needs API + web + DB; run when UI/API paths change, not after every tiny edit.
+  - Do **not** commit `.env` or secrets (use `.env.example` only).
+
+  CI on PRs runs `npm ci`, `npm test --workspaces --if-present`, and `npm run build --workspaces --if-present` (see `.github/workflows/ci.yml`).
+
+# Per-artifact rules for agents using OpenSpec in this repo.
+rules:
+  proposal:
+    - When finishing the proposal, run the default test + build commands above if any code was touched; otherwise commit documentation with a conventional message.
+  specs:
+    - After delta specs are written, commit as a dedicated commit; run tests if spec changes drove code hooks (usually docs-only).
+  design:
+    - After design.md is stable, commit; if design implies immediate spikes, run targeted tests for spike code before commit.
+  tasks:
+    - Split tasks so each is completable in one session with a **test + commit** checkpoint.
+    - Task descriptions SHOULD remind implementers to: (1) implement, (2) run `npm test --workspaces --if-present` (narrower scope if appropriate), (3) commit, (4) mark the task `[x]` in `tasks.md`.
+    - Do not batch many unrelated tasks into one commit unless the team explicitly agrees.
