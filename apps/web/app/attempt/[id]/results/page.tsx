@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { apiSend } from "@/lib/api";
+import { useEffect, useRef, useState } from "react";
+import { apiSend, formatApiError } from "@/lib/api";
 
 type Outcome = {
   scaledScore: number;
@@ -21,22 +21,25 @@ export default function ResultsPage() {
 
   const [payload, setPayload] = useState<Outcome | null>(null);
   const [error, setError] = useState<string | undefined>();
+  const activeRef = useRef(true);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    activeRef.current = true;
+    void (async () => {
       try {
         const res = await apiSend<Outcome>(`/attempts/${attemptId}/submit`, {
           method: "POST",
           body: "{}",
         });
-        if (!cancelled) setPayload(res);
+        if (!activeRef.current) return;
+        setPayload(res);
       } catch (e) {
-        if (!cancelled) setError((e as Error).message);
+        if (!activeRef.current) return;
+        setError(formatApiError(e));
       }
     })();
     return () => {
-      cancelled = true;
+      activeRef.current = false;
     };
   }, [attemptId]);
 
@@ -44,9 +47,10 @@ export default function ResultsPage() {
     <div className="card">
       <h1>Results</h1>
       {error ? <p style={{ color: "#fca5a5" }}>{error}</p> : null}
-      {!payload ? (
-        <p>Loading…</p>
-      ) : (
+      {!payload && !error ? (
+        <p>Scoring your attempt…</p>
+      ) : null}
+      {payload ? (
         <>
           <p>
             Estimated scaled score: <strong>{payload.scaledScore}</strong>
@@ -77,7 +81,7 @@ export default function ResultsPage() {
             </tbody>
           </table>
         </>
-      )}
+      ) : null}
       <p style={{ marginTop: 16 }}>
         <Link href="/exam">Practice again</Link>
       </p>
