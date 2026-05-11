@@ -62,10 +62,15 @@ services:
     volumes:
       - tei_cache:/data
 
-  # Chat LLM (OpenAI-compatible /v1/chat/completions). Pull models after `up` — see README (Gemma 4, DeepSeek).
-  # Uses host port 11434 (same as native `ollama serve`); stop one if you run both.
+  # Chat LLM in Docker (optional). Default stack does NOT start this — use host `ollama serve` (see README).
+  # Enable: docker compose --profile ollama up -d
+  # Explicit DNS often fixes registry pull timeouts inside Docker Desktop / VPN setups.
   ollama:
+    profiles: ["ollama"]
     image: ollama/ollama:latest
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     ports:
       - "11434:11434"
     volumes:
