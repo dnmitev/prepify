@@ -10,5 +10,46 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  # Temporal persistence (separate from app DB). Not published to the host to avoid clashing with `postgres` on 5432.
+  temporal-postgresql:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    expose:
+      - "5432"
+    volumes:
+      - temporal_pgdata:/var/lib/postgresql/data
+
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    depends_on:
+      - temporal-postgresql
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-postgresql
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CLI_ADDRESS: temporal:7233
+    ports:
+      - "7233:7233"
+    volumes:
+      # Required: auto-setup validates this file at startup (see temporalio/docker-compose)
+      - ./docker/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8080:8080"
+
 volumes:
   pgdata:
+  temporal_pgdata:

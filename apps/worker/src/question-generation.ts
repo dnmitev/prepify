@@ -1,3 +1,5 @@
+import { allowsMissingOpenAiApiKey } from "@prepify/shared";
+
 const JSON_CONTRACT = `Return a single JSON object with this shape:
 {
   "stem": string (exam-style scenario, >= 40 chars),
@@ -63,11 +65,14 @@ async function openAiRawPayload(params: {
   summary: string;
   model: string;
 }): Promise<{ raw: unknown; inputTokens: number; outputTokens: number }> {
-  const key = process.env["OPENAI_API_KEY"];
-  if (!key) {
-    throw new Error("OPENAI_API_KEY is required when LLM_ROLE_QUESTION_GENERATION_PROVIDER=openai");
-  }
   const base = process.env["OPENAI_BASE_URL"] ?? "https://api.openai.com/v1";
+  const key = process.env["OPENAI_API_KEY"];
+  const allowNoKey = allowsMissingOpenAiApiKey(base, process.env);
+  if (!key?.trim() && !allowNoKey) {
+    throw new Error(
+      "OPENAI_API_KEY is required for this OPENAI_BASE_URL (use localhost / 127.0.0.1 base URL, set LOCAL_LLM_SKIP_API_KEY=1 for non-loopback dev servers, or provide a key)",
+    );
+  }
   const url = `${base.replace(/\/$/, "")}/chat/completions`;
 
   const body = {
@@ -86,12 +91,14 @@ async function openAiRawPayload(params: {
     ],
   };
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (key?.trim()) {
+    headers["Authorization"] = `Bearer ${key.trim()}`;
+  }
+
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
   });
 

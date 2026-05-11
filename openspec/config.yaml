@@ -26,6 +26,6 @@ rules:
   design:
     - After design.md is stable, commit; if design implies immediate spikes, run targeted tests for spike code before commit.
   tasks:
-    - Split tasks so each is completable in one session with a **test + commit** checkpoint.
-    - Task descriptions SHOULD remind implementers to: (1) implement, (2) run `npm test --workspaces --if-present` (narrower scope if appropriate), (3) commit, (4) mark the task `[x]` in `tasks.md`.
-    - Do not batch many unrelated tasks into one commit unless the team explicitly agrees.
+    - "Split tasks so each is completable in one session with a test + commit checkpoint."
+    - "Task descriptions SHOULD remind implementers to implement, run npm test --workspaces --if-present (narrower scope if appropriate), commit, then mark [x] in tasks.md."
+    - "Do not batch many unrelated tasks into one commit unless the team explicitly agrees."

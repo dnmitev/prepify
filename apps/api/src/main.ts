@@ -1,3 +1,4 @@
+import "./load-env.js";
 import { buildServer } from "./server.js";
 
 const env = process.env;
