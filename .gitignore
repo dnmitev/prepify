@@ -15,3 +15,6 @@ graphify-out/cost.json        # local only
 apps/api/tsconfig.tsbuildinfo
 packages/db/tsconfig.tsbuildinfo
 packages/shared/tsconfig.tsbuildinfo
+apps/api/tsconfig.tsbuildinfo
+packages/db/tsconfig.tsbuildinfo
+packages/shared/tsconfig.tsbuildinfo
