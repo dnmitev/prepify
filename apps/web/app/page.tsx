@@ -34,20 +34,9 @@ export default async function HomePage() {
           </ul>
         </section>
       ) : null}
-      <ul>
-        <li>
-          <Link href="/history">Attempt history</Link>
-        </li>
-        <li>
-          <Link href="/exam">Start SAA-C03 practice</Link>
-        </li>
-        <li>
-          <Link href="/admin/jobs">AI jobs (local/dev)</Link>
-        </li>
-        <li>
-          <Link href="/experimental/webllm">Experimental on-device explanations</Link>
-        </li>
-      </ul>
+      <p style={{ opacity: 0.85, marginTop: 16 }}>
+        Use the menu above for <strong>Practice</strong>, <strong>History</strong>, and other sections.
+      </p>
       <p style={{ opacity: 0.75, fontSize: 14 }}>
         API base: <code>{process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}</code>
       </p>
