@@ -6,7 +6,7 @@
 
 ## 2. Shared Dedupe Logic
 
-- [ ] 2.1 Add deterministic helper(s) for canonical generated-question text, including exam code, domain code, format, stem, and ordered option text while excluding explanations; run `npm test -w @prepify/shared`, commit, then mark this task complete.
+- [x] 2.1 Add deterministic helper(s) for canonical generated-question text, including exam code, domain code, format, stem, and ordered option text while excluding explanations; run `npm test -w @prepify/shared`, commit, then mark this task complete.
 - [ ] 2.2 Add threshold decision helper(s) for hard duplicate and review-band similarity outcomes, including config parsing defaults; run `npm test -w @prepify/shared`, commit, then mark this task complete.
 
 ## 3. Worker Integration

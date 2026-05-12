@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { validateGeneratedQuestionPayload } from "./generated-question.js";
+import {
+  buildGeneratedQuestionCanonicalText,
+  validateGeneratedQuestionPayload,
+} from "./generated-question.js";
 
 function minimalValidPayload(domainCode: string) {
   return {
@@ -101,5 +104,36 @@ describe("validateGeneratedQuestionPayload", () => {
       ],
     });
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("buildGeneratedQuestionCanonicalText", () => {
+  it("normalizes and orders assessment text without explanations", () => {
+    const base = minimalValidPayload("SECURE");
+    const text = buildGeneratedQuestionCanonicalText({
+      examTypeCode: " SAA-C03 ",
+      domainCode: "SECURE",
+      stem: "  The   stem keeps only normalized     whitespace. ",
+      format: "single",
+      options: [
+        { position: 2, text: "Third option" },
+        { position: 0, text: " First   option " },
+        { position: 1, text: base.options[1]!.text },
+      ],
+    });
+
+    expect(text).toBe(
+      [
+        "Exam: SAA-C03",
+        "Domain: SECURE",
+        "Format: single",
+        "Stem: The stem keeps only normalized whitespace.",
+        "Options:",
+        "Option 0: First option",
+        `Option 1: ${base.options[1]!.text}`,
+        "Option 2: Third option",
+      ].join("\n"),
+    );
+    expect(text).not.toContain("Usage plans tie API keys");
   });
 });

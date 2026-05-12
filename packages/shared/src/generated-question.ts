@@ -26,8 +26,46 @@ export type ValidateGeneratedQuestionOptions = {
   allowedDomainCodes?: readonly string[];
 };
 
+export type GeneratedQuestionCanonicalTextInput = {
+  examTypeCode: string;
+  domainCode: string;
+  stem: string;
+  format: QuestionFormat;
+  options: {
+    position: number;
+    text: string;
+  }[];
+};
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function normalizeTextForEmbedding(text: string): string {
+  return text.trim().replace(/\s+/g, " ");
+}
+
+/**
+ * Canonical assessment text used for semantic duplicate detection.
+ * Explanations are intentionally excluded so shared rationale wording does not
+ * make distinct questions look more similar than they are.
+ */
+export function buildGeneratedQuestionCanonicalText(
+  input: GeneratedQuestionCanonicalTextInput,
+): string {
+  const optionLines = [...input.options]
+    .sort((a, b) => a.position - b.position)
+    .map((o) => `Option ${String(o.position)}: ${normalizeTextForEmbedding(o.text)}`)
+    .join("\n");
+
+  return [
+    `Exam: ${normalizeTextForEmbedding(input.examTypeCode)}`,
+    `Domain: ${normalizeTextForEmbedding(input.domainCode)}`,
+    `Format: ${input.format}`,
+    `Stem: ${normalizeTextForEmbedding(input.stem)}`,
+    "Options:",
+    optionLines,
+  ].join("\n");
 }
 
 /** Derive select mode from answer keys — models often mismatch `format` vs `isCorrect` counts. */
