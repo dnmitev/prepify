@@ -394,6 +394,8 @@ export async function buildServer(): Promise<FastifyInstance> {
       topicHint,
       targetQuestionCount: qc.value,
       completedQuestionCount: 0,
+      candidateAttemptCount: 0,
+      duplicateSkippedCount: 0,
     });
 
     await client.workflow.start("generateQuestionWorkflow", {
@@ -425,6 +427,8 @@ export async function buildServer(): Promise<FastifyInstance> {
       .orderBy(asc(questions.id));
     return {
       ...job,
+      candidateAttemptCount: job.candidateAttemptCount,
+      duplicateSkippedCount: job.duplicateSkippedCount,
       generatedQuestionIds: genQs.map((q) => q.id),
       generatedQuestionId: genQs[0]?.id ?? null,
     };

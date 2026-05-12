@@ -18,7 +18,7 @@
 
 ## 4. API, Web, And Configuration
 
-- [ ] 4.1 Expose duplicate skip count and candidate attempt count in existing generation job status/API responses; run `npm test -w @prepify/api`, commit, then mark this task complete.
+- [x] 4.1 Expose duplicate skip count and candidate attempt count in existing generation job status/API responses; run `npm test -w @prepify/api`, commit, then mark this task complete.
 - [ ] 4.2 Show duplicate skip/attempt information on the admin generation jobs page without changing the generation request flow; run relevant web tests or `npm test -w @prepify/web` if available, commit, then mark this task complete.
 - [ ] 4.3 Document `QUESTION_DUPLICATE_HARD_THRESHOLD`, `QUESTION_DUPLICATE_REVIEW_THRESHOLD`, and `QUESTION_GENERATION_MAX_ATTEMPT_MULTIPLIER` in `.env.example` and README local AI guidance; run docs-relevant checks if available, commit, then mark this task complete.
 
