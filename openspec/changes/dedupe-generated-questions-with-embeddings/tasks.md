@@ -26,4 +26,4 @@
 
 - [x] 5.1 Add an integration or worker-level test proving a high-similarity duplicate candidate is skipped and a below-threshold candidate is persisted with an embedding; run the targeted package test, commit, then mark this task complete.
 - [x] 5.2 Run `npm test --workspaces --if-present` and `npm run build` after all implementation tasks are complete, fix regressions, commit final task updates, then mark this task complete.
-- [ ] 5.3 Manually smoke-test a local generation job with mock embeddings and, when available, a real local embedding model to verify counters, threshold behavior, and accepted question count.
+- [x] 5.3 Manually smoke-test a local generation job with mock embeddings and, when available, a real local embedding model to verify counters, threshold behavior, and accepted question count.
