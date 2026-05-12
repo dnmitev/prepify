@@ -14,7 +14,7 @@
 - [x] 3.1 Generalize or wrap the existing embedding client so question dedupe can use the configured embedding provider/model without depending on post-exam naming; run `npm test -w @prepify/worker`, commit, then mark this task complete.
 - [x] 3.2 Add the duplicate gate after generated-question schema validation and before question insertion, including embedding generation, nearest-neighbor search, hard-threshold skip behavior, and usage accounting with a dedupe-specific embedding role; run `npm test -w @prepify/worker`, commit, then mark this task complete.
 - [x] 3.3 Update batch workflow behavior so skipped duplicates trigger bounded replacement attempts while completed progress counts only accepted persisted questions; run `npm test -w @prepify/worker`, commit, then mark this task complete.
-- [ ] 3.4 Ensure embedding failures fail the job with a clear message and do not persist candidate questions; add tests for provider failure or invalid embedding responses, run `npm test -w @prepify/worker`, commit, then mark this task complete.
+- [x] 3.4 Ensure embedding failures fail the job with a clear message and do not persist candidate questions; add tests for provider failure or invalid embedding responses, run `npm test -w @prepify/worker`, commit, then mark this task complete.
 
 ## 4. API, Web, And Configuration
 
