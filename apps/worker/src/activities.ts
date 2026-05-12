@@ -88,6 +88,33 @@ export async function summarizeTopic(input: {
   return `Summary for "${input.topic}" on ${input.examTypeCode} (mock summarization).`;
 }
 
+export async function loadQuestionGenerationDedupeConfig(): Promise<{
+  maxAttemptMultiplier: number;
+}> {
+  const cfg = questionDuplicateThresholdConfigFromEnv(process.env);
+  return { maxAttemptMultiplier: cfg.maxAttemptMultiplier };
+}
+
+export async function markQuestionGenerationAttemptLimit(input: {
+  jobId: string;
+  targetQuestionCount: number;
+  acceptedQuestionCount: number;
+  candidateAttemptCount: number;
+}): Promise<void> {
+  await workerDb()
+    .update(generationJobs)
+    .set({
+      status: "failed",
+      completedQuestionCount: input.acceptedQuestionCount,
+      candidateAttemptCount: input.candidateAttemptCount,
+      errorMessage:
+        `Generation stopped after ${String(input.candidateAttemptCount)} candidate attempts ` +
+        `with ${String(input.acceptedQuestionCount)} accepted of ${String(input.targetQuestionCount)} requested questions.`,
+      updatedAt: new Date(),
+    })
+    .where(eq(generationJobs.id, input.jobId));
+}
+
 export async function generateQuestionItem(input: {
   jobId: string;
   examTypeCode: string;

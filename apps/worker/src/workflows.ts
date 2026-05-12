@@ -1,7 +1,12 @@
 import { proxyActivities, workflowInfo } from "@temporalio/workflow";
 import type * as acts from "./activities.js";
 
-const { summarizeTopic, generateQuestionItem } = proxyActivities<typeof acts>({
+const {
+  summarizeTopic,
+  generateQuestionItem,
+  loadQuestionGenerationDedupeConfig,
+  markQuestionGenerationAttemptLimit,
+} = proxyActivities<typeof acts>({
   startToCloseTimeout: "5 minutes",
   retry: { maximumAttempts: 4 },
 });
@@ -34,8 +39,14 @@ export async function generateQuestionWorkflow(input: {
   }
 
   const n = Math.max(1, input.questionCount);
-  for (let i = 0; i < n; i++) {
-    await generateQuestionItem({
+  const dedupe = await loadQuestionGenerationDedupeConfig();
+  const maxAttempts = n * Math.max(1, Math.floor(dedupe.maxAttemptMultiplier));
+  let accepted = 0;
+  let candidateAttempt = 0;
+
+  while (accepted < n && candidateAttempt < maxAttempts) {
+    candidateAttempt++;
+    const result = await generateQuestionItem({
       jobId: input.jobId,
       examTypeCode: input.examTypeCode,
       topicHint: input.topicHint ?? null,
@@ -44,7 +55,21 @@ export async function generateQuestionWorkflow(input: {
       environmentLabel: input.environmentLabel,
       workflowId: wf,
       questionCount: n,
-      iterationIndex: i,
+      iterationIndex: candidateAttempt - 1,
+      acceptedQuestionIndex: accepted,
+      candidateAttemptNumber: candidateAttempt,
+    });
+    if (result.ok) {
+      accepted++;
+    }
+  }
+
+  if (accepted < n) {
+    await markQuestionGenerationAttemptLimit({
+      jobId: input.jobId,
+      targetQuestionCount: n,
+      acceptedQuestionCount: accepted,
+      candidateAttemptCount: candidateAttempt,
     });
   }
 }
