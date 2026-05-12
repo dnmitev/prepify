@@ -87,7 +87,15 @@ Without Temporal running, **`POST /jobs/generate`** returns **503**. Optional UI
 
 When **`POST_EXAM_TRAINING_ENABLED=1`**, finishing an attempt with **at least one incorrect scored question** starts Temporal workflow **`postExamTrainingWorkflow`** (`post-exam-training-<attemptId>`). The worker writes **English** per-item summaries (small/cheap role), a consolidated **teaching** block (stronger role), **`pgvector`** embeddings (**384** dimensions, aligned with **BGE small** / Compose **TEI**), and exposes **`GET /attempts/:id/training`** for status and text. Default roles use **`mock`** so local dev works without extra LLM calls; set **`LLM_ROLE_*`** and **`EMBEDDING_OPENAI_BASE_URL`** (e.g. `http://localhost:8089/v1` for Compose **TEI**) for real models.
 
-**Breaking change:** **`POST /jobs/generate`** now requires **`examTypeCode`** (a seeded catalog code such as **`SAA-C03`**). Requests that only send the legacy **`topic`** field will receive **400**. Optional fields: **`topicHint`** (narrowing focus), **`summarize`** (**boolean**, default **false** — set **`true`** to run the optional small-model summarization step before generation), **`questionCount`** (**integer**, default **1**, max **`GENERATION_MAX_QUESTIONS_PER_JOB`** or **50** — run one Temporal workflow that generates that many questions sequentially).
+**Breaking change:** **`POST /jobs/generate`** now requires **`examTypeCode`** (a seeded catalog code such as **`SAA-C03`**). Requests that only send the legacy **`topic`** field will receive **400**. Optional fields: **`topicHint`** (narrowing focus), **`summarize`** (**boolean**, default **false** — set **`true`** to run the optional small-model summarization step before generation), **`questionCount`** (**integer**, default **1**, max **`GENERATION_MAX_QUESTIONS_PER_JOB`** or **50** — run one Temporal workflow that generates that many accepted questions sequentially).
+
+Generated questions are embedded before persistence and compared against existing question embeddings in the same exam/domain. The worker uses **`LLM_ROLE_EMBEDDING_PROVIDER`**, **`LLM_ROLE_EMBEDDING_MODEL`**, and **`EMBEDDING_OPENAI_BASE_URL`** (or mock embeddings) for this dedupe gate. Defaults:
+
+- **`QUESTION_DUPLICATE_HARD_THRESHOLD=0.94`** — candidate is skipped at or above this cosine similarity.
+- **`QUESTION_DUPLICATE_REVIEW_THRESHOLD=0.88`** — accepted candidate is close enough to watch during tuning.
+- **`QUESTION_GENERATION_MAX_ATTEMPT_MULTIPLIER=3`** — max candidate attempts is requested question count times this multiplier.
+
+Poll **`GET /jobs/:id`** for **`completedQuestionCount`**, **`targetQuestionCount`**, **`candidateAttemptCount`**, **`duplicateSkippedCount`**, and **`generatedQuestionIds`**.
 
 ### Local LLM — Ollama + Gemma 4 (or DeepSeek)
 
@@ -127,7 +135,7 @@ If Ollama is not running, switch generation to **mock** using the commented bloc
 
 - `docker compose up -d` — app Postgres + Temporal + UI (+ **TEI**). For chat: **host** `ollama serve` + `ollama pull …`, **or** `docker compose --profile ollama up -d` + `docker compose exec ollama ollama pull …`.
 - Temporal Web UI loads at `http://localhost:8080`.
-- **`POST /jobs/generate`** with JSON body `{ "examTypeCode": "SAA-C03", "questionCount": 1 }` and **`LLM_ROLE_QUESTION_GENERATION_PROVIDER=mock`** returns `{ jobId, workflowId }` when testing without Ollama (requires API + Temporal + worker + migrated DB). Poll **`GET /jobs/:id`** for **`completedQuestionCount`**, **`targetQuestionCount`**, and **`generatedQuestionIds`**.
+- **`POST /jobs/generate`** with JSON body `{ "examTypeCode": "SAA-C03", "questionCount": 1 }` and **`LLM_ROLE_QUESTION_GENERATION_PROVIDER=mock`** returns `{ jobId, workflowId }` when testing without Ollama (requires API + Temporal + worker + migrated DB). Poll **`GET /jobs/:id`** for **`completedQuestionCount`**, **`targetQuestionCount`**, **`candidateAttemptCount`**, **`duplicateSkippedCount`**, and **`generatedQuestionIds`**.
 - With Ollama + Gemma 4 configured, **`POST /jobs/generate`** exercises real JSON generation (quality depends on model and prompt).
 
 ## Testing
