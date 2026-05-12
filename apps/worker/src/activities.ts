@@ -1,8 +1,26 @@
 import { and, asc, eq } from "drizzle-orm";
-import { domains, examTypes, generationJobs, questionOptions, questions } from "@prepify/db";
-import { validateGeneratedQuestionPayload } from "@prepify/shared";
+import {
+  domains,
+  examTypes,
+  generationJobs,
+  insertQuestionEmbedding,
+  QUESTION_EMBEDDING_DIMENSION,
+  questionOptions,
+  questions,
+  recordQuestionGenerationCandidateAttempt,
+  recordSkippedDuplicateQuestionCandidate,
+  searchQuestionEmbeddingNeighbors,
+} from "@prepify/db";
+import {
+  buildGeneratedQuestionCanonicalText,
+  decideQuestionDuplicate,
+  questionDuplicateThresholdConfigFromEnv,
+  validateGeneratedQuestionPayload,
+} from "@prepify/shared";
+import { createHash } from "node:crypto";
 
 import { workerDb } from "./db-client.js";
+import { embedText } from "./embeddings.js";
 import { recordLlmUsage } from "./llm-usage.js";
 import { runQuestionGenerationModel } from "./question-generation.js";
 
@@ -17,7 +35,13 @@ async function failJob(jobId: string, message: string): Promise<void> {
     .where(eq(generationJobs.id, jobId));
 }
 
-function roleConfig(role: "summarization" | "question_generation") {
+function roleConfig(role: "summarization" | "question_generation" | "embedding") {
+  if (role === "embedding") {
+    return {
+      provider: process.env["LLM_ROLE_EMBEDDING_PROVIDER"] ?? "mock",
+      model: process.env["LLM_ROLE_EMBEDDING_MODEL"] ?? "bge-small-en-v1.5",
+    };
+  }
   const providerEnv =
     role === "summarization"
       ? process.env["LLM_ROLE_SUMMARIZATION_PROVIDER"]
@@ -30,6 +54,10 @@ function roleConfig(role: "summarization" | "question_generation") {
     provider: providerEnv ?? "mock",
     model: modelEnv ?? (role === "summarization" ? "mock-mini" : "mock-large"),
   };
+}
+
+function hashCanonicalQuestionText(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
 }
 
 export async function summarizeTopic(input: {
@@ -70,11 +98,24 @@ export async function generateQuestionItem(input: {
   workflowId: string;
   questionCount: number;
   iterationIndex: number;
-}): Promise<{ ok: true; questionId: string }> {
+  acceptedQuestionIndex?: number;
+  candidateAttemptNumber?: number;
+}): Promise<
+  | { ok: true; questionId: string }
+  | {
+      ok: false;
+      reason: "duplicate";
+      nearestQuestionId: string | null;
+      similarity: number;
+    }
+> {
   const cfg = roleConfig("question_generation");
+  const embedCfg = roleConfig("embedding");
 
   try {
     const db = workerDb();
+    const acceptedQuestionIndex = input.acceptedQuestionIndex ?? input.iterationIndex;
+    const candidateAttemptNumber = input.candidateAttemptNumber ?? input.iterationIndex + 1;
 
     if (!input.summarize) {
       await db
@@ -143,6 +184,71 @@ export async function generateQuestionItem(input: {
     }
 
     const sortedOpts = [...parsed.value.options].sort((a, b) => a.position - b.position);
+    const canonicalText = buildGeneratedQuestionCanonicalText({
+      examTypeCode: input.examTypeCode,
+      domainCode: parsed.value.domainCode,
+      stem: parsed.value.stem,
+      format: parsed.value.format,
+      options: sortedOpts,
+    });
+    const canonicalTextHash = hashCanonicalQuestionText(canonicalText);
+
+    await recordQuestionGenerationCandidateAttempt(db, {
+      jobId: input.jobId,
+      candidateAttemptNumber,
+    });
+
+    const { embedding, inputTokens: embeddingInputTokens } = await embedText({
+      text: canonicalText,
+      provider: embedCfg.provider,
+      model: embedCfg.model,
+      expectedDimension: QUESTION_EMBEDDING_DIMENSION,
+      context: "questionEmbedding",
+    });
+
+    await recordLlmUsage(db, {
+      jobId: input.jobId,
+      environmentLabel: input.environmentLabel,
+      provider: embedCfg.provider,
+      model: embedCfg.model,
+      role: "question_deduplication_embedding",
+      workflowId: input.workflowId,
+      activityName: "generateQuestionItem",
+      inputTokens: embeddingInputTokens,
+      outputTokens: 0,
+    });
+
+    const nearest = (
+      await searchQuestionEmbeddingNeighbors(db, {
+        examTypeId: exam.id,
+        domainId: domainRow.id,
+        embedding,
+        limit: 1,
+      })
+    )[0];
+    const thresholds = questionDuplicateThresholdConfigFromEnv(process.env);
+    const decision = decideQuestionDuplicate({
+      similarity: nearest?.similarity ?? 0,
+      hardThreshold: thresholds.hardThreshold,
+      reviewThreshold: thresholds.reviewThreshold,
+    });
+
+    if (decision.kind === "hard_duplicate") {
+      await recordSkippedDuplicateQuestionCandidate(db, {
+        jobId: input.jobId,
+        candidateAttemptNumber,
+        nearestQuestionId: nearest?.questionId ?? null,
+        similarity: decision.similarity,
+        threshold: decision.hardThreshold,
+        canonicalTextHash,
+      });
+      return {
+        ok: false,
+        reason: "duplicate",
+        nearestQuestionId: nearest?.questionId ?? null,
+        similarity: decision.similarity,
+      };
+    }
 
     const [qRow] = await db
       .insert(questions)
@@ -166,11 +272,20 @@ export async function generateQuestionItem(input: {
       })),
     );
 
+    await insertQuestionEmbedding(db, {
+      questionId: qRow!.id,
+      examTypeId: exam.id,
+      domainId: domainRow.id,
+      canonicalTextHash,
+      embedding,
+      embeddingModel: embedCfg.model,
+    });
+
     await db
       .update(generationJobs)
       .set({
-        completedQuestionCount: input.iterationIndex + 1,
-        status: input.iterationIndex + 1 >= input.questionCount ? "succeeded" : "running",
+        completedQuestionCount: acceptedQuestionIndex + 1,
+        status: acceptedQuestionIndex + 1 >= input.questionCount ? "succeeded" : "running",
         updatedAt: new Date(),
         errorMessage: null,
       })
