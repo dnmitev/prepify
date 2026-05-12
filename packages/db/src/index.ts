@@ -19,3 +19,4 @@ export * from "./schema.js";
 export * from "./training-constants.js";
 export * from "./post-exam-training-queries.js";
 export * from "./post-exam-training-repo.js";
+export * from "./question-embedding-repo.js";
