@@ -8,6 +8,14 @@ type ExamRow = {
   name: string;
 };
 
+type JobSnapshot = {
+  status?: string;
+  targetQuestionCount?: number;
+  completedQuestionCount?: number;
+  candidateAttemptCount?: number;
+  duplicateSkippedCount?: number;
+};
+
 export default function AdminJobsPage() {
   const [exams, setExams] = useState<ExamRow[]>([]);
   const [loadError, setLoadError] = useState<string>("");
@@ -16,6 +24,7 @@ export default function AdminJobsPage() {
   const [summarize, setSummarize] = useState(false);
   const [questionCount, setQuestionCount] = useState(1);
   const [result, setResult] = useState<string>("");
+  const [jobSnapshot, setJobSnapshot] = useState<JobSnapshot | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -44,16 +53,18 @@ export default function AdminJobsPage() {
           summarize,
         }),
       });
-      let snapshot: Record<string, unknown> | null = null;
+      let snapshot: (Record<string, unknown> & JobSnapshot) | null = null;
       if (res.jobId) {
         try {
-          snapshot = await apiGet<Record<string, unknown>>(`/jobs/${res.jobId}`);
+          snapshot = await apiGet<Record<string, unknown> & JobSnapshot>(`/jobs/${res.jobId}`);
         } catch {
           snapshot = null;
         }
       }
+      setJobSnapshot(snapshot);
       setResult(JSON.stringify(snapshot ? { enqueue: res, job: snapshot } : res, null, 2));
     } catch (e) {
+      setJobSnapshot(null);
       setResult(formatApiError(e));
     }
   }
@@ -117,6 +128,26 @@ export default function AdminJobsPage() {
       <button type="button" className="primary" onClick={() => void enqueue()} disabled={!examCode}>
         Enqueue generation workflow
       </button>
+      {jobSnapshot ? (
+        <div style={{ marginTop: 16, display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <span>
+            Status: <strong>{jobSnapshot.status ?? "unknown"}</strong>
+          </span>
+          <span>
+            Accepted:{" "}
+            <strong>
+              {String(jobSnapshot.completedQuestionCount ?? 0)}/
+              {String(jobSnapshot.targetQuestionCount ?? questionCount)}
+            </strong>
+          </span>
+          <span>
+            Attempts: <strong>{String(jobSnapshot.candidateAttemptCount ?? 0)}</strong>
+          </span>
+          <span>
+            Duplicate skips: <strong>{String(jobSnapshot.duplicateSkippedCount ?? 0)}</strong>
+          </span>
+        </div>
+      ) : null}
       <pre style={{ whiteSpace: "pre-wrap", marginTop: 16 }}>{result}</pre>
     </div>
   );
