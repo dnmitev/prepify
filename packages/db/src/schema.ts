@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -45,6 +46,8 @@ export const generationJobs = pgTable("generation_jobs", {
   topicHint: text("topic_hint"),
   targetQuestionCount: integer("target_question_count").notNull().default(1),
   completedQuestionCount: integer("completed_question_count").notNull().default(0),
+  candidateAttemptCount: integer("candidate_attempt_count").notNull().default(0),
+  duplicateSkippedCount: integer("duplicate_skipped_count").notNull().default(0),
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -76,6 +79,31 @@ export const questionOptions = pgTable("question_options", {
   isCorrect: boolean("is_correct").notNull(),
   explanation: text("explanation"),
 });
+
+export const generationJobDuplicateCandidates = pgTable(
+  "generation_job_duplicate_candidates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    generationJobId: uuid("generation_job_id")
+      .notNull()
+      .references(() => generationJobs.id, { onDelete: "cascade" }),
+    candidateAttemptNumber: integer("candidate_attempt_number").notNull(),
+    nearestQuestionId: uuid("nearest_question_id").references(() => questions.id, {
+      onDelete: "set null",
+    }),
+    similarityScoreBps: integer("similarity_score_bps").notNull(),
+    thresholdBps: integer("threshold_bps").notNull(),
+    canonicalTextHash: text("canonical_text_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    uniqJobAttempt: uniqueIndex("generation_job_duplicate_candidates_job_attempt_idx").on(
+      t.generationJobId,
+      t.candidateAttemptNumber,
+    ),
+    jobIdx: index("generation_job_duplicate_candidates_job_idx").on(t.generationJobId),
+  }),
+);
 
 export const attempts = pgTable("attempts", {
   id: uuid("id").defaultRandom().primaryKey(),

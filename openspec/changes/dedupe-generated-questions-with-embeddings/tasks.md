@@ -1,7 +1,7 @@
 ## 1. Database And Repository Layer
 
 - [x] 1.1 Add a database migration for `question_embeddings` with pgvector storage, embedding metadata, canonical text hash, and indexes for exam/domain-scoped nearest-neighbor lookup; run `npm test -w @prepify/db`, commit, then mark this task complete.
-- [ ] 1.2 Add generation job duplicate/attempt counters or equivalent audit rows for skipped candidates and nearest-match metadata; run `npm test -w @prepify/db`, commit, then mark this task complete.
+- [x] 1.2 Add generation job duplicate/attempt counters or equivalent audit rows for skipped candidates and nearest-match metadata; run `npm test -w @prepify/db`, commit, then mark this task complete.
 - [ ] 1.3 Add DB exports/repository helpers for inserting question embeddings and searching nearest question neighbors by cosine distance within exam/domain scope; cover helper behavior where feasible, run `npm test -w @prepify/db`, commit, then mark this task complete.
 
 ## 2. Shared Dedupe Logic
