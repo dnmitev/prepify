@@ -15,9 +15,9 @@ import { buildServer } from "./server.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = join(__dirname, "../../../packages/db/drizzle");
 
-describe("GET /attempts (resumable list)", () => {
-  let container: Awaited<ReturnType<PostgreSqlContainer["start"]>>;
-  let app: FastifyInstance;
+describe.skipIf(!process.env["RUN_INTEGRATION"])("GET /attempts (resumable list)", () => {
+  let container: Awaited<ReturnType<PostgreSqlContainer["start"]>> | undefined;
+  let app: FastifyInstance | undefined;
   let examId: string;
 
   beforeAll(async () => {
@@ -47,13 +47,14 @@ describe("GET /attempts (resumable list)", () => {
   }, 120_000);
 
   afterAll(async () => {
-    await app.close();
-    await container.stop();
+    await app?.close();
+    await container?.stop();
   });
 
   it("includes active and paused, excludes submitted/expired, and expires stale active rows", async () => {
     const databaseUrl = process.env["DATABASE_URL"];
     if (!databaseUrl) throw new Error("DATABASE_URL missing");
+    if (!app) throw new Error("Fastify app missing");
     const db = createDb(databaseUrl);
 
     try {
@@ -131,6 +132,7 @@ describe("GET /attempts (resumable list)", () => {
   it("paginates GET /attempts/history with scores and statuses", async () => {
     const databaseUrl = process.env["DATABASE_URL"];
     if (!databaseUrl) throw new Error("DATABASE_URL missing");
+    if (!app) throw new Error("Fastify app missing");
     const db = createDb(databaseUrl);
 
     try {
